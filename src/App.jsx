@@ -263,8 +263,7 @@ async function fetchMergedData(code, startDate, endDate, token) {
     const tryFetch = async (suffix) => {
       try {
         const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
-        const res = await fetch(proxyUrl);
+        const res = await fetch(`https://corsproxy.io/?${yahooUrl}`);
         const json = await res.json();
         const result = json?.chart?.result?.[0];
         if (!result || !result.timestamp) return [];
