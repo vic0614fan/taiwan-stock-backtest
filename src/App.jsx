@@ -223,48 +223,97 @@ function runBacktest(data, strategy, params, initialCapital = 1000000) {
   };
 }
 
-// ─── 資料抓取 ─────────────────────────────────────────────
+// 新版 fetchMergedData 函數
+// 替換 App.jsx 裡的 fetchMergedData 函數即可
+
 async function fetchMergedData(code, startDate, endDate, token) {
   const CUTOFF = "2025-04-01";
-  let finmindData = [], twseData = [];
+  let finmindData = [], recentData = [];
 
+  // 步驟一：用 FinMind 抓歷史資料（到 2025/3）
   if (startDate < CUTOFF) {
     const fEnd = endDate < CUTOFF ? endDate : CUTOFF;
-    const res = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${startDate}&end_date=${fEnd}&token=${token}`);
+    const res = await fetch(
+      `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${startDate}&end_date=${fEnd}&token=${token}`
+    );
     const json = await res.json();
     if (json.data?.length) {
-      finmindData = json.data.map(d => ({ date: d.date, open: parseFloat(d.open), high: parseFloat(d.max), low: parseFloat(d.min), close: parseFloat(d.close), volume: parseFloat(d.Trading_Volume) }));
+      finmindData = json.data.map(d => ({
+        date: d.date,
+        open: parseFloat(d.open),
+        high: parseFloat(d.max),
+        low: parseFloat(d.min),
+        close: parseFloat(d.close),
+        volume: parseFloat(d.Trading_Volume),
+      }));
     }
   }
 
+  // 步驟二：用 Yahoo Finance 抓近期資料（2025/4 以後）
+  // Yahoo Finance 支援上市(.TW)和上櫃(.TWO)，自動判斷
   if (endDate >= CUTOFF) {
-    try {
-      const tStart = startDate > CUTOFF ? startDate : CUTOFF;
-      const sy = parseInt(tStart.split("-")[0]), sm = parseInt(tStart.split("-")[1]);
-      const ey = parseInt(endDate.split("-")[0]), em = parseInt(endDate.split("-")[1]);
-      for (let y = sy; y <= ey; y++) {
-        for (let m = (y === sy ? sm : 1); m <= (y === ey ? em : 12); m++) {
-          const yyyymmdd = `${y}${String(m).padStart(2,"0")}01`;
-          const res = await fetch(`https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=${yyyymmdd}&stockNo=${code}&response=json`);
-          const json = await res.json();
-          if (json.data) {
-            for (const row of json.data) {
-              const p = row[0].split("/");
-              const iso = `${parseInt(p[0])+1911}-${p[1].padStart(2,"0")}-${p[2].padStart(2,"0")}`;
-              if (iso < tStart || iso > endDate) continue;
-              twseData.push({ date: iso, open: parseFloat(row[3].replace(/,/g,"")), high: parseFloat(row[4].replace(/,/g,"")), low: parseFloat(row[5].replace(/,/g,"")), close: parseFloat(row[6].replace(/,/g,"")), volume: parseFloat(row[1].replace(/,/g,"")) });
-            }
-          }
-          await new Promise(r => setTimeout(r, 300));
-        }
+    const tStart = startDate > CUTOFF ? startDate : CUTOFF;
+    const startTs = Math.floor(new Date(tStart).getTime() / 1000);
+    const endTs = Math.floor(new Date(endDate).getTime() / 1000) + 86400;
+
+    // 先試上市股(.TW)
+    let yahooData = [];
+    let tried = false;
+
+    const tryFetch = async (suffix) => {
+      try {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        const result = json?.chart?.result?.[0];
+        if (!result || !result.timestamp) return [];
+
+        const { timestamp, indicators } = result;
+        const quote = indicators.quote[0];
+        return timestamp.map((ts, i) => {
+          const date = new Date(ts * 1000);
+          const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+          return {
+            date: iso,
+            open: quote.open[i] ? parseFloat(quote.open[i].toFixed(2)) : null,
+            high: quote.high[i] ? parseFloat(quote.high[i].toFixed(2)) : null,
+            low: quote.low[i] ? parseFloat(quote.low[i].toFixed(2)) : null,
+            close: quote.close[i] ? parseFloat(quote.close[i].toFixed(2)) : null,
+            volume: quote.volume[i] || 0,
+          };
+        }).filter(d => d.close !== null && d.date >= tStart && d.date <= endDate);
+      } catch(e) {
+        return [];
       }
-    } catch(e) { console.warn("TWSE error:", e); }
+    };
+
+    // 先試上市(.TW)，沒資料再試上櫃(.TWO)
+    yahooData = await tryFetch(".TW");
+    if (yahooData.length === 0) {
+      yahooData = await tryFetch(".TWO");
+    }
+
+    recentData = yahooData;
   }
 
+  // 步驟三：合併並去重排序
+  const allData = [...finmindData, ...recentData];
   const seen = new Set();
-  const merged = [...finmindData, ...twseData].filter(d => { if (seen.has(d.date)) return false; seen.add(d.date); return true; }).sort((a,b) => a.date.localeCompare(b.date));
-  if (merged.length === 0) throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確`);
-  if (merged.length < 25) throw new Error(`資料筆數不足（${merged.length} 筆），請延長時間區間至少 25 個交易日`);
+  const merged = allData
+    .filter(d => {
+      if (!d.date || seen.has(d.date)) return false;
+      seen.add(d.date);
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (merged.length === 0) {
+    throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確（上市/上櫃皆支援）`);
+  }
+  if (merged.length < 25) {
+    throw new Error(`資料筆數不足（${merged.length} 筆），請延長時間區間至少 25 個交易日`);
+  }
+
   return merged;
 }
 
