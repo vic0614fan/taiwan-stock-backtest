@@ -4,39 +4,38 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
 
-// ─── 策略定義 ──────────────────────────────────────────────
 const STRATEGIES = {
-  ma_cross:         { name: "MA 黃金交叉",    tag: "趨勢", color: "#64b5f6", desc: "MA5 上穿 MA20 買進，下穿賣出。適合趨勢明確的市場。", lines: ["MA5","MA20"], market: "剛開始上漲" },
-  ma_triple:        { name: "三線多頭排列",   tag: "趨勢", color: "#4fc3f7", desc: "MA5>MA20>MA60 全部多頭排列才買進。適合強勢趨勢股。", lines: ["MA5","MA20","MA60"], market: "單邊上漲趨勢" },
-  rsi_oversold:     { name: "RSI 超賣反彈",   tag: "反轉", color: "#ce93d8", desc: "RSI<30 買進，RSI>70 賣出。適合震盪橫盤市場。", lines: ["RSI(14)"], market: "震盪橫盤" },
-  kd_cross:         { name: "KD 黃金交叉",    tag: "反轉", color: "#f48fb1", desc: "低檔 KD 黃金交叉買進，高檔死亡交叉賣出。", lines: ["K值","D值"], market: "震盪橫盤" },
-  macd_cross:       { name: "MACD 黃金交叉",  tag: "趨勢", color: "#80cbc4", desc: "MACD 線上穿訊號線買進，適合中長線趨勢操作。", lines: ["MACD線","訊號線","柱狀圖"], market: "單邊上漲趨勢" },
-  bollinger:        { name: "布林通道突破",    tag: "突破", color: "#ffcc80", desc: "價格突破上軌買進，跌破下軌賣出。適合波動大的股票。", lines: ["上軌","中軌(MA20)","下軌"], market: "剛開始上漲" },
-  bollinger_revert: { name: "布林通道反轉",    tag: "反轉", color: "#ffb74d", desc: "價格觸碰下軌反彈買進，觸碰上軌賣出。適合橫盤整理。", lines: ["上軌","中軌(MA20)","下軌"], market: "震盪橫盤" },
-  volume_breakout:  { name: "量增突破",        tag: "突破", color: "#a5d6a7", desc: "量增超過5日均量2倍且價格創新高買進。適合主力介入初期。", lines: ["MA20","成交量","5日均量"], market: "剛開始上漲" },
-  turtle:           { name: "海龜突破策略",    tag: "突破", color: "#ef9a9a", desc: "突破20日高點買進，跌破10日低點賣出。經典趨勢追蹤系統。", lines: ["20日最高價","10日最低價"], market: "單邊上漲趨勢" },
-  rsi_ma:           { name: "RSI + MA 組合",  tag: "組合", color: "#b39ddb", desc: "RSI 在 40~65 健康區間且股價在 MA20 上方才買進。", lines: ["RSI(14)","MA20"], market: "不確定市場" },
-  custom:           { name: "自訂策略",        tag: "自訂", color: "#90caf9", desc: "自行勾選多個指標組合條件。", lines: ["可自選"], market: "依條件而定" },
+  ma_cross:         { name: "MA 黃金交叉",    tag: "趨勢", color: "#64b5f6", desc: "MA5 上穿 MA20 買進，下穿賣出。適合趨勢明確的市場。" },
+  ma_triple:        { name: "三線多頭排列",   tag: "趨勢", color: "#4fc3f7", desc: "MA5>MA20>MA60 全部多頭排列才買進。適合強勢趨勢股。" },
+  rsi_oversold:     { name: "RSI 超賣反彈",   tag: "反轉", color: "#ce93d8", desc: "RSI<30 買進，RSI>70 賣出。適合震盪橫盤市場。" },
+  kd_cross:         { name: "KD 黃金交叉",    tag: "反轉", color: "#f48fb1", desc: "低檔 KD 黃金交叉買進，高檔死亡交叉賣出。" },
+  macd_cross:       { name: "MACD 黃金交叉",  tag: "趨勢", color: "#80cbc4", desc: "MACD 線上穿訊號線買進，適合中長線趨勢操作。" },
+  bollinger:        { name: "布林通道突破",    tag: "突破", color: "#ffcc80", desc: "價格突破上軌買進，跌破下軌賣出。" },
+  bollinger_revert: { name: "布林通道反轉",    tag: "反轉", color: "#ffb74d", desc: "價格觸碰下軌反彈買進，觸碰上軌賣出。" },
+  volume_breakout:  { name: "量增突破",        tag: "突破", color: "#a5d6a7", desc: "量增超過5日均量2倍且價格創新高買進。" },
+  turtle:           { name: "海龜突破策略",    tag: "突破", color: "#ef9a9a", desc: "突破20日高點買進，跌破10日低點賣出。" },
+  rsi_ma:           { name: "RSI + MA 組合",  tag: "組合", color: "#b39ddb", desc: "RSI 在 40~65 健康區間且股價在 MA20 上方才買進。" },
+  custom:           { name: "自訂策略",        tag: "自訂", color: "#90caf9", desc: "自行勾選多個指標組合條件。" },
 };
 
 const STRATEGY_DETAILS = [
   { type: "趨勢類", items: [
     { name: "MA 黃金交叉", lines: "MA5、MA20", meaning: "MA5 代表短期趨勢，MA20 代表中期趨勢。MA5 上穿 MA20 代表短期動能超越中期，趨勢轉強。" },
     { name: "三線多頭排列", lines: "MA5、MA20、MA60", meaning: "三條均線由上到下排列（MA5>MA20>MA60），代表短中長期趨勢全部向上，是最強的趨勢確認訊號。" },
-    { name: "MACD 黃金交叉", lines: "MACD線、訊號線、柱狀圖", meaning: "MACD線是12日EMA減26日EMA，訊號線是MACD的9日均線。MACD線上穿訊號線代表動能由弱轉強，柱狀圖由負轉正是買進訊號。" },
+    { name: "MACD 黃金交叉", lines: "MACD線、訊號線、柱狀圖", meaning: "MACD線是12日EMA減26日EMA，訊號線是MACD的9日均線。MACD線上穿訊號線代表動能由弱轉強。" },
   ]},
   { type: "反轉類", items: [
-    { name: "RSI 超賣反彈", lines: "RSI(14)", meaning: "RSI 衡量一段時間內漲跌幅的比例，範圍 0～100。低於 30 代表超賣（跌過頭），從超賣區回升是反彈訊號；高於 70 代表超買，是賣出訊號。" },
+    { name: "RSI 超賣反彈", lines: "RSI(14)", meaning: "RSI 衡量一段時間內漲跌幅的比例，範圍 0～100。低於 30 代表超賣，從超賣區回升是反彈訊號；高於 70 代表超買，是賣出訊號。" },
     { name: "KD 黃金交叉", lines: "K值、D值", meaning: "K值是快線（較敏感），D值是慢線（較平滑）。K值從低檔（<50）上穿D值代表動能轉強；K值從高檔（>50）下穿D值代表動能轉弱。" },
-    { name: "布林通道反轉", lines: "上軌、中軌（MA20）、下軌", meaning: "布林通道用標準差計算上下軌。價格觸碰下軌代表跌過頭，預期反彈回到中軌；觸碰上軌代表漲過頭，預期回落。" },
+    { name: "布林通道反轉", lines: "上軌、中軌（MA20）、下軌", meaning: "布林通道用標準差計算上下軌。價格觸碰下軌代表跌過頭，預期反彈；觸碰上軌代表漲過頭，預期回落。" },
   ]},
   { type: "突破類", items: [
     { name: "布林通道突破", lines: "上軌、中軌（MA20）、下軌", meaning: "與布林通道反轉相反。價格突破上軌代表強勢突破，追漲買進；跌破下軌代表強勢破底，出場。" },
-    { name: "量增突破", lines: "MA20、成交量、5日均量", meaning: "成交量代表市場參與程度。當成交量超過5日均量2倍且同時創新高，代表有大量資金湧入，是主力介入的訊號。" },
+    { name: "量增突破", lines: "MA20、成交量、5日均量", meaning: "當成交量超過5日均量2倍且同時創新高，代表有大量資金湧入，是主力介入的訊號。" },
     { name: "海龜突破策略", lines: "20日最高價、10日最低價", meaning: "源自 1983 年的海龜交易系統。突破20日高點代表趨勢確立向上；跌破10日低點代表趨勢反轉，出場止損。" },
   ]},
   { type: "組合類", items: [
-    { name: "RSI + MA 組合", lines: "RSI(14)、MA20", meaning: "結合趨勢和動能兩個維度。RSI 在 40～65 的健康區間代表有動能但未過熱；股價在 MA20 上方代表趨勢向上。兩個條件同時符合才進場，減少假訊號。" },
+    { name: "RSI + MA 組合", lines: "RSI(14)、MA20", meaning: "結合趨勢和動能兩個維度。RSI 在 40～65 的健康區間代表有動能但未過熱；股價在 MA20 上方代表趨勢向上。" },
     { name: "自訂策略", lines: "MA、RSI、KD、MACD、成交量（可自選）", meaning: "由使用者自行組合多個指標，所有勾選條件同時成立才買進，任一賣出條件觸發就出場。" },
   ]},
 ];
@@ -48,7 +47,6 @@ const MARKET_STRATEGY = [
   { market: "不確定市場", strategies: ["RSI + MA 組合", "自訂策略"], color: "#ce93d8" },
 ];
 
-// ─── 技術指標計算 ──────────────────────────────────────────
 function calcMA(data, period) {
   return data.map((_, i) => {
     if (i < period - 1) return null;
@@ -114,7 +112,6 @@ function calcMaxDrawdown(equity, initial) {
   return maxDD.toFixed(2);
 }
 
-// ─── 回測引擎 ─────────────────────────────────────────────
 function runBacktest(data, strategy, params, initialCapital, stopLossPct, takeProfitPct) {
   const ma5 = calcMA(data, 5), ma20 = calcMA(data, 20), ma60 = calcMA(data, 60);
   const rsi = calcRSI(data, 14);
@@ -134,7 +131,6 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
     const price = data[i].close;
     let buySignal = false, sellSignal = false, sellReason = "";
 
-    // 停損停利檢查
     if (inPosition) {
       if (slPct > 0 && price <= buyPrice * (1 - slPct)) { sellSignal = true; sellReason = "停損"; }
       if (tpPct > 0 && price >= buyPrice * (1 + tpPct)) { sellSignal = true; sellReason = "停利"; }
@@ -144,54 +140,48 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
       if (strategy === "ma_cross") {
         if (ma5[i] && ma20[i] && ma5[i-1] && ma20[i-1]) {
           buySignal = ma5[i] > ma20[i] && ma5[i-1] <= ma20[i-1];
-          if (!sellReason) sellSignal = ma5[i] < ma20[i] && ma5[i-1] >= ma20[i-1];
+          sellSignal = ma5[i] < ma20[i] && ma5[i-1] >= ma20[i-1];
         }
       } else if (strategy === "ma_triple") {
         if (ma5[i] && ma20[i] && ma60[i] && ma5[i-1] && ma20[i-1] && ma60[i-1]) {
           const now = ma5[i] > ma20[i] && ma20[i] > ma60[i];
           const prev = ma5[i-1] > ma20[i-1] && ma20[i-1] > ma60[i-1];
-          buySignal = now && !prev; if (!sellReason) sellSignal = !now && prev;
+          buySignal = now && !prev; sellSignal = !now && prev;
         }
       } else if (strategy === "rsi_oversold") {
         if (rsi[i] !== null && rsi[i-1] !== null) {
           buySignal = rsi[i-1] < 30 && rsi[i] >= 30;
-          if (!sellReason) sellSignal = rsi[i] > 70;
+          sellSignal = rsi[i] > 70;
         }
       } else if (strategy === "kd_cross") {
         if (k[i] && d[i] && k[i-1] && d[i-1]) {
           buySignal = k[i] > d[i] && k[i-1] <= d[i-1] && k[i] < 50;
-          if (!sellReason) sellSignal = k[i] < d[i] && k[i-1] >= d[i-1] && k[i] > 50;
+          sellSignal = k[i] < d[i] && k[i-1] >= d[i-1] && k[i] > 50;
         }
       } else if (strategy === "macd_cross") {
         if (macdLine[i] && signal[i] && macdLine[i-1] && signal[i-1]) {
           buySignal = macdLine[i] > signal[i] && macdLine[i-1] <= signal[i-1];
-          if (!sellReason) sellSignal = macdLine[i] < signal[i] && macdLine[i-1] >= signal[i-1];
+          sellSignal = macdLine[i] < signal[i] && macdLine[i-1] >= signal[i-1];
         }
       } else if (strategy === "bollinger") {
         if (boll[i].upper && boll[i-1].upper) {
           buySignal = data[i-1].close <= boll[i-1].lower && price > boll[i].lower;
-          if (!sellReason) sellSignal = price > boll[i].upper;
+          sellSignal = price > boll[i].upper;
         }
       } else if (strategy === "bollinger_revert") {
-        if (boll[i].upper) {
-          buySignal = price <= boll[i].lower;
-          if (!sellReason) sellSignal = price >= boll[i].upper;
-        }
+        if (boll[i].upper) { buySignal = price <= boll[i].lower; sellSignal = price >= boll[i].upper; }
       } else if (strategy === "volume_breakout") {
         const avgV = avgVol5[i], prevHigh = i > 1 ? Math.max(...data.slice(Math.max(0, i-5), i).map(d => d.high)) : null;
         if (avgV && prevHigh && ma20[i]) {
           buySignal = volumes[i] > avgV * 2 && price > prevHigh && price > ma20[i];
-          if (!sellReason) sellSignal = inPosition && (price < ma20[i] || (rsi[i] && rsi[i] > 75));
+          sellSignal = inPosition && (price < ma20[i] || (rsi[i] && rsi[i] > 75));
         }
       } else if (strategy === "turtle") {
-        if (high20[i] && low10[i]) {
-          buySignal = price > high20[i];
-          if (!sellReason) sellSignal = price < low10[i];
-        }
+        if (high20[i] && low10[i]) { buySignal = price > high20[i]; sellSignal = price < low10[i]; }
       } else if (strategy === "rsi_ma") {
         if (rsi[i] && ma20[i] && rsi[i-1] && ma20[i-1]) {
           buySignal = rsi[i] > 40 && rsi[i] < 65 && price > ma20[i] && !(rsi[i-1] > 40 && rsi[i-1] < 65 && data[i-1].close > ma20[i-1]);
-          if (!sellReason) sellSignal = rsi[i] > 70 || price < ma20[i];
+          sellSignal = rsi[i] > 70 || price < ma20[i];
         }
       } else if (strategy === "custom") {
         const conds = [];
@@ -201,13 +191,11 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
         if (params.useMACD && macdLine[i]) conds.push(macdLine[i] > signal[i]);
         if (params.useVol && avgVol5[i]) conds.push(volumes[i] > avgVol5[i] * 1.5);
         buySignal = conds.length > 0 && conds.every(Boolean) && !inPosition;
-        if (!sellReason) {
-          const sc = [];
-          if (params.useMA && ma5[i] && ma20[i]) sc.push(ma5[i] < ma20[i]);
-          if (params.useRSI && rsi[i]) sc.push(rsi[i] > 70);
-          if (params.useMACD && macdLine[i]) sc.push(macdLine[i] < signal[i]);
-          sellSignal = sc.some(Boolean);
-        }
+        const sc = [];
+        if (params.useMA && ma5[i] && ma20[i]) sc.push(ma5[i] < ma20[i]);
+        if (params.useRSI && rsi[i]) sc.push(rsi[i] > 70);
+        if (params.useMACD && macdLine[i]) sc.push(macdLine[i] < signal[i]);
+        sellSignal = sc.some(Boolean);
       }
     }
 
@@ -239,7 +227,6 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
   };
 }
 
-// ─── 資料抓取 ─────────────────────────────────────────────
 async function fetchYahoo(code, suffix, startTs, endTs, tStart, endDate) {
   try {
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
@@ -278,102 +265,168 @@ async function fetchMergedData(code, startDate, endDate, token) {
   }
   const seen = new Set();
   const merged = [...finmindData, ...recentData].filter(d => { if (!d.date || seen.has(d.date)) return false; seen.add(d.date); return true; }).sort((a, b) => a.date.localeCompare(b.date));
-  if (merged.length === 0) throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確（上市/上櫃皆支援）`);
-  if (merged.length < 25) throw new Error(`資料筆數不足（${merged.length} 筆），請延長時間區間至少 25 個交易日`);
+  if (merged.length === 0) throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確`);
+  if (merged.length < 25) throw new Error(`資料筆數不足（${merged.length} 筆），請延長時間區間`);
   return merged;
 }
 
-// ─── K線圖（支援滾輪縮放）────────────────────────────────
-const CandlestickChart = ({ data, trades }) => {
-  const [viewRange, setViewRange] = useState({ start: 0, end: data.length - 1 });
-  const chartRef = useRef(null);
+// ─── K線圖（修正版：支援 Tooltip + 滾輪縮放 + 不超出畫面）────
+const CandlestickChart = ({ data, trades, chartData }) => {
+  const [viewRange, setViewRange] = useState({ start: 0, end: Math.min(data.length - 1, 59) });
+  const containerRef = useRef(null);
+  const [tooltip, setTooltip] = useState(null);
 
   useEffect(() => {
-    setViewRange({ start: Math.max(0, data.length - 60), end: data.length - 1 });
+    const end = data.length - 1;
+    const start = Math.max(0, end - 59);
+    setViewRange({ start, end });
   }, [data.length]);
 
   const handleWheel = useCallback((e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 1 : -1;
     const range = viewRange.end - viewRange.start;
-    const newRange = Math.max(20, Math.min(data.length, range + delta * Math.ceil(range * 0.1)));
+    const newRange = Math.max(20, Math.min(data.length, range + delta * Math.max(1, Math.ceil(range * 0.1))));
     const center = Math.floor((viewRange.start + viewRange.end) / 2);
-    const newStart = Math.max(0, center - Math.floor(newRange / 2));
-    const newEnd = Math.min(data.length - 1, newStart + newRange);
+    const newStart = Math.max(0, Math.min(data.length - newRange, center - Math.floor(newRange / 2)));
+    const newEnd = Math.min(data.length - 1, newStart + newRange - 1);
     setViewRange({ start: newStart, end: newEnd });
   }, [viewRange, data.length]);
 
   useEffect(() => {
-    const el = chartRef.current;
+    const el = containerRef.current;
     if (el) el.addEventListener("wheel", handleWheel, { passive: false });
     return () => { if (el) el.removeEventListener("wheel", handleWheel); };
   }, [handleWheel]);
 
   const visible = data.slice(viewRange.start, viewRange.end + 1);
-  const tradeSet = new Set(trades?.map(t => t.date) || []);
-  const prices = visible.flatMap(d => [d.high, d.low]).filter(Boolean);
-  const minP = Math.min(...prices) * 0.998;
-  const maxP = Math.max(...prices) * 1.002;
-  const barWidth = Math.max(2, Math.floor(800 / visible.length) - 1);
+  const W = 800, H = 260, PAD = 50, VOL_H = 50;
+  const prices = visible.flatMap(d => [d.high, d.low]).filter(v => v && !isNaN(v));
+  const minP = Math.min(...prices) * 0.997;
+  const maxP = Math.max(...prices) * 1.003;
+  const pRange = maxP - minP;
+  const maxVol = Math.max(...visible.map(d => d.volume || 0));
+  const colW = Math.max(2, Math.floor((W - PAD) / visible.length) - 1);
+  const toY = (p) => 8 + (1 - (p - minP) / pRange) * (H - 16);
+
+  // 找出買賣點日期
+  const buyDates = new Set(trades?.filter(t => t.type === "buy").map(t => t.date) || []);
+  const sellDates = new Set(trades?.filter(t => t.type === "sell").map(t => t.date) || []);
+
+  const handleMouseMove = (e, d, i) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const ma5v = chartData?.[viewRange.start + i]?.ma5;
+    const ma20v = chartData?.[viewRange.start + i]?.ma20;
+    const ma60v = chartData?.[viewRange.start + i]?.ma60;
+    setTooltip({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      data: d, ma5: ma5v, ma20: ma20v, ma60: ma60v,
+    });
+  };
 
   return (
-    <div ref={chartRef} style={{ userSelect: "none" }}>
-      <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 8, display: "flex", gap: 16 }}>
+    <div ref={containerRef} style={{ position: "relative", userSelect: "none", width: "100%", overflowX: "hidden" }}>
+      <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 6, display: "flex", gap: 16, flexWrap: "wrap" }}>
         <span>🖱 滾輪縮放</span>
-        <span>顯示 {visible.length} 根 K 棒（共 {data.length} 根）</span>
-        <span style={{ color: "#4caf50" }}>▲ 綠色=漲</span>
-        <span style={{ color: "#ef5350" }}>▼ 紅色=跌</span>
+        <span>顯示 {visible.length} 根（共 {data.length} 根）</span>
+        <span style={{ color: "#ef5350" }}>▲ 紅色=漲</span>
+        <span style={{ color: "#4caf50" }}>▼ 綠色=跌</span>
+        <span style={{ color: "#4caf50" }}>▲ 買進點</span>
+        <span style={{ color: "#ef5350" }}>▼ 賣出點</span>
       </div>
-      <svg width="100%" viewBox={`0 0 820 280`} style={{ overflow: "visible" }}>
-        {visible.map((d, i) => {
-          const x = 20 + i * (820 / visible.length);
-          const isUp = d.close >= d.open;
-          const color = isUp ? "#4caf50" : "#ef5350";
-          const bodyTop = 10 + (maxP - Math.max(d.open, d.close)) / (maxP - minP) * 250;
-          const bodyBot = 10 + (maxP - Math.min(d.open, d.close)) / (maxP - minP) * 250;
-          const highY = 10 + (maxP - d.high) / (maxP - minP) * 250;
-          const lowY = 10 + (maxP - d.low) / (maxP - minP) * 250;
-          const bodyH = Math.max(1, bodyBot - bodyTop);
-          const isBuy = trades?.find(t => t.type === "buy" && t.date === d.date);
-          const isSell = trades?.find(t => t.type === "sell" && t.date === d.date);
-          return (
-            <g key={i}>
-              <line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth={1} />
-              <rect x={x - barWidth / 2} y={bodyTop} width={barWidth} height={bodyH} fill={color} stroke={color} strokeWidth={0.5} />
-              {isBuy && <text x={x} y={lowY + 12} textAnchor="middle" fill="#4caf50" fontSize={8}>▲</text>}
-              {isSell && <text x={x} y={highY - 4} textAnchor="middle" fill="#ef5350" fontSize={8}>▼</text>}
-            </g>
-          );
-        })}
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div style={{
+          position: "absolute", left: tooltip.x + 12, top: Math.max(0, tooltip.y - 80),
+          background: "#0f1923", border: "1px solid #1e3a4f", borderRadius: 8,
+          padding: "8px 12px", fontSize: 11, zIndex: 10, pointerEvents: "none",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.5)", minWidth: 140,
+        }}>
+          <div style={{ color: "#64b5f6", fontWeight: 700, marginBottom: 4 }}>{tooltip.data.date}</div>
+          <div style={{ color: "#e0f0ff" }}>開：{tooltip.data.open?.toFixed(2)}</div>
+          <div style={{ color: "#e0f0ff" }}>高：{tooltip.data.high?.toFixed(2)}</div>
+          <div style={{ color: "#e0f0ff" }}>低：{tooltip.data.low?.toFixed(2)}</div>
+          <div style={{ color: tooltip.data.close >= tooltip.data.open ? "#ef5350" : "#4caf50", fontWeight: 700 }}>收：{tooltip.data.close?.toFixed(2)}</div>
+          {tooltip.ma5 && <div style={{ color: "#ffd54f" }}>MA5：{tooltip.ma5}</div>}
+          {tooltip.ma20 && <div style={{ color: "#ef9a9a" }}>MA20：{tooltip.ma20}</div>}
+          {tooltip.ma60 && <div style={{ color: "#a5d6a7" }}>MA60：{tooltip.ma60}</div>}
+          <div style={{ color: "#546e7a" }}>量：{(tooltip.data.volume / 1000).toFixed(0)}K</div>
+        </div>
+      )}
+
+      <svg width="100%" viewBox={`0 0 ${W + PAD} ${H + VOL_H + 20}`} onMouseLeave={() => setTooltip(null)}>
+        {/* 價格格線 */}
         {[0, 0.25, 0.5, 0.75, 1].map(r => {
-          const price = maxP - r * (maxP - minP);
-          const y = 10 + r * 250;
+          const price = maxP - r * pRange;
+          const y = toY(price);
           return (
             <g key={r}>
-              <line x1={0} y1={y} x2={820} y2={y} stroke="#0d2a3a" strokeDasharray="4 4" />
-              <text x={824} y={y + 4} fill="#546e7a" fontSize={9}>{price.toFixed(1)}</text>
+              <line x1={0} y1={y} x2={W} y2={y} stroke="#0d2a3a" strokeDasharray="4 4" />
+              <text x={W + 2} y={y + 4} fill="#546e7a" fontSize={9}>{price.toFixed(1)}</text>
             </g>
           );
         })}
-        {visible.filter((_, i) => i % Math.ceil(visible.length / 6) === 0).map((d, i, arr) => {
-          const origI = visible.indexOf(d);
-          const x = 20 + origI * (820 / visible.length);
-          return <text key={i} x={x} y={274} fill="#546e7a" fontSize={8} textAnchor="middle">{d.date?.slice(5)}</text>;
+
+        {/* MA 線 */}
+        {["ma5", "ma20", "ma60"].map((maKey, mi) => {
+          const colors = ["#ffd54f", "#ef9a9a", "#a5d6a7"];
+          const points = visible.map((d, i) => {
+            const v = chartData?.[viewRange.start + i]?.[maKey];
+            if (!v) return null;
+            const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
+            return `${x},${toY(v)}`;
+          }).filter(Boolean);
+          if (points.length < 2) return null;
+          return <polyline key={maKey} points={points.join(" ")} fill="none" stroke={colors[mi]} strokeWidth={1} opacity={0.8} />;
         })}
-      </svg>
-      <svg width="100%" viewBox="0 0 820 60">
+
+        {/* K棒 */}
         {visible.map((d, i) => {
-          const x = 20 + i * (820 / visible.length);
-          const maxVol = Math.max(...visible.map(v => v.volume));
-          const h = (d.volume / maxVol) * 50;
-          return <rect key={i} x={x - barWidth / 2} y={60 - h} width={barWidth} height={h} fill={d.close >= d.open ? "#4caf5066" : "#ef535066"} />;
+          if (!d.open || !d.close || !d.high || !d.low) return null;
+          const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
+          // 台灣習慣：漲=紅，跌=綠
+          const isUp = d.close >= d.open;
+          const color = isUp ? "#ef5350" : "#4caf50";
+          const bodyTop = toY(Math.max(d.open, d.close));
+          const bodyBot = toY(Math.min(d.open, d.close));
+          const bodyH = Math.max(1, bodyBot - bodyTop);
+          const highY = toY(d.high);
+          const lowY = toY(d.low);
+          const isBuy = buyDates.has(d.date);
+          const isSell = sellDates.has(d.date);
+          return (
+            <g key={i} onMouseMove={(e) => handleMouseMove(e, d, i)} style={{ cursor: "crosshair" }}>
+              <line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth={1} />
+              <rect x={x - colW / 2} y={bodyTop} width={colW} height={bodyH} fill={color} stroke={color} strokeWidth={0.5} />
+              {isBuy && <text x={x} y={lowY + 12} textAnchor="middle" fill="#4caf50" fontSize={10} fontWeight="bold">▲</text>}
+              {isSell && <text x={x} y={highY - 4} textAnchor="middle" fill="#ef5350" fontSize={10} fontWeight="bold">▼</text>}
+            </g>
+          );
+        })}
+
+        {/* 日期標籤 */}
+        {visible.filter((_, i) => i % Math.max(1, Math.ceil(visible.length / 7)) === 0).map((d, idx) => {
+          const i = visible.indexOf(d);
+          const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
+          return <text key={idx} x={x} y={H + 14} fill="#546e7a" fontSize={8} textAnchor="middle">{d.date?.slice(5)}</text>;
+        })}
+
+        {/* 成交量 */}
+        {visible.map((d, i) => {
+          if (!d.volume || maxVol === 0) return null;
+          const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
+          const volH = (d.volume / maxVol) * (VOL_H - 4);
+          const isUp = d.close >= d.open;
+          return <rect key={i} x={x - colW / 2} y={H + 20 + (VOL_H - 4 - volH)} width={colW} height={volH} fill={isUp ? "#ef535055" : "#4caf5055"} />;
         })}
       </svg>
     </div>
   );
 };
 
-// ─── UI 元件 ──────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -403,7 +456,6 @@ const ErrorModal = ({ message, onClose }) => {
   );
 };
 
-// ─── 主元件 ───────────────────────────────────────────────
 export default function App() {
   const [stockCode, setStockCode] = useState("2330");
   const [startDate, setStartDate] = useState("2024-01-01");
@@ -482,9 +534,9 @@ export default function App() {
         setLoadingMsg(`📡 抓取 ${code} 中...`);
         const data = await fetchMergedData(code, startDate, endDate, finmindToken);
         const first = data[0].close;
-        const normalized = data.map(d => ({ date: d.date.slice(5), [`${code}`]: +((d.close - first) / first * 100).toFixed(2) }));
+        const normalized = data.map(d => ({ date: d.date.slice(5), [code]: +((d.close - first) / first * 100).toFixed(2) }));
         const bt = runBacktest(data, strategy, strategy === "custom" ? customParams : {}, initialCapital, stopLoss, takeProfit);
-        results.push({ code, normalized, backtest: bt, dataLength: data.length });
+        results.push({ code, normalized, backtest: bt });
       }
       setMultiResults(results); setActiveTab("multi_stock");
     } catch(e) { setError(e.message); }
@@ -496,27 +548,12 @@ export default function App() {
     if (!backtestResult) { setError("請先執行回測再進行 AI 分析"); return; }
     setClaudeLoading(true); setClaudeAnalysis("");
     try {
-      const summary = `
-股票：${stockCode}
-策略：${STRATEGIES[strategy]?.name}
-時間：${startDate} ~ ${endDate}
-初始資金：${(initialCapital/10000).toFixed(0)}萬元
-停損設定：${stopLoss > 0 ? stopLoss + "%" : "無"}
-停利設定：${takeProfit > 0 ? takeProfit + "%" : "無"}
-總報酬率：${backtestResult.totalReturn}%
-勝率：${backtestResult.winRate}%（${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗）
-最大回撤：${backtestResult.maxDrawdown}%
-最終資金：${(backtestResult.finalCapital/10000).toFixed(0)}萬元
-交易次數：${backtestResult.sellTrades.length}次
-最近5筆交易：${backtestResult.sellTrades.slice(-5).map(t => `${t.date} ${t.profitPct}% (${t.reason})`).join("、")}
-      `.trim();
-
+      const summary = `股票：${stockCode}\n策略：${STRATEGIES[strategy]?.name}\n時間：${startDate} ~ ${endDate}\n初始資金：${(initialCapital/10000).toFixed(0)}萬元\n停損：${stopLoss > 0 ? stopLoss + "%" : "無"}\n停利：${takeProfit > 0 ? takeProfit + "%" : "無"}\n總報酬率：${backtestResult.totalReturn}%\n勝率：${backtestResult.winRate}%（${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗）\n最大回撤：${backtestResult.maxDrawdown}%\n最終資金：${(backtestResult.finalCapital/10000).toFixed(0)}萬元\n交易次數：${backtestResult.sellTrades.length}次\n最近5筆：${backtestResult.sellTrades.slice(-5).map(t => `${t.date} ${t.profitPct}%(${t.reason})`).join("、")}`;
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": claudeKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 800,
+          model: "claude-haiku-4-5-20251001", max_tokens: 800,
           messages: [{ role: "user", content: `你是台股量化分析師，以下是一個回測結果，請給出專業分析和改進建議：\n\n${summary}\n\n請用以下格式回答，不要使用Markdown符號：\n\n📊 整體評估：\n（評估這個策略的表現好壞，50字以內）\n\n✅ 優點：\n（列出2-3個策略的優點）\n\n⚠️ 缺點與風險：\n（列出2-3個需要注意的問題）\n\n💡 改進建議：\n（給出3個具體的改進方向）\n\n🎯 結論：\n（是否建議使用這個策略，30字以內）` }],
         }),
       });
@@ -536,19 +573,15 @@ export default function App() {
     </div>
   );
 
+  const COLORS = ["#64b5f6", "#ffd54f", "#a5d6a7", "#f48fb1", "#ce93d8", "#80cbc4"];
   const mergedMulti = multiResults ? (() => {
     const allDates = [...new Set(multiResults.flatMap(r => r.normalized.map(d => d.date)))].sort();
     return allDates.map(date => {
       const row = { date };
-      multiResults.forEach(r => {
-        const point = r.normalized.find(d => d.date === date);
-        if (point) row[r.code] = point[r.code];
-      });
+      multiResults.forEach(r => { const pt = r.normalized.find(d => d.date === date); if (pt) row[r.code] = pt[r.code]; });
       return row;
     });
   })() : [];
-
-  const COLORS = ["#64b5f6", "#ffd54f", "#a5d6a7", "#f48fb1", "#ce93d8", "#80cbc4"];
 
   return (
     <div style={{ background: "#060e17", minHeight: "100vh", color: "#e0f0ff", fontFamily: "'Segoe UI', sans-serif", padding: "20px" }}>
@@ -561,7 +594,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <div style={{ width: 8, height: 32, background: "linear-gradient(180deg,#1565c0,#0288d1)", borderRadius: 4 }} />
         <div>
@@ -570,7 +602,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* 控制面板 */}
       <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18, marginBottom: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 12 }}>
           {[
@@ -588,15 +619,14 @@ export default function App() {
           ))}
         </div>
 
-        {/* 停損停利 */}
         <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 140 }}>
             <label style={{ color: "#ef5350", fontSize: 10, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>停損 % (0=不設定)</label>
-            <input style={{ ...inp, borderColor: stopLoss > 0 ? "#ef5350" : "#1e3a4f" }} type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} min={0} max={50} placeholder="例如 5 代表 -5%" />
+            <input style={{ ...inp, borderColor: stopLoss > 0 ? "#ef5350" : "#1e3a4f" }} type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} min={0} max={50} placeholder="例如 5 = -5%" />
           </div>
           <div style={{ flex: 1, minWidth: 140 }}>
             <label style={{ color: "#4caf50", fontSize: 10, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>停利 % (0=不設定)</label>
-            <input style={{ ...inp, borderColor: takeProfit > 0 ? "#4caf50" : "#1e3a4f" }} type="number" value={takeProfit} onChange={e => setTakeProfit(Number(e.target.value))} min={0} max={200} placeholder="例如 15 代表 +15%" />
+            <input style={{ ...inp, borderColor: takeProfit > 0 ? "#4caf50" : "#1e3a4f" }} type="number" value={takeProfit} onChange={e => setTakeProfit(Number(e.target.value))} min={0} max={200} placeholder="例如 15 = +15%" />
           </div>
           <div style={{ flex: 2, minWidth: 200 }}>
             <label style={{ color: "#ffd54f", fontSize: 10, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>多股比較（逗號分隔）</label>
@@ -607,7 +637,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 策略選擇 */}
         <div style={{ marginBottom: 12 }}>
           <label style={{ color: "#546e7a", fontSize: 10, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>回測策略</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -653,7 +682,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* 統計數字 */}
       {backtestResult && (
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           {statBox("總報酬率", `${backtestResult.totalReturn}%`, parseFloat(backtestResult.totalReturn) >= 0 ? "#4caf50" : "#ef5350")}
@@ -666,42 +694,32 @@ export default function App() {
         </div>
       )}
 
-      {/* 分頁 */}
       {(chartData.length > 0 || multiResults) && (
         <>
           <div style={{ display: "flex", gap: 3, marginBottom: 14, background: "#0a1520", padding: 5, borderRadius: 8, flexWrap: "wrap" }}>
             {[
-              ["chart","📊 K線圖"],["bollinger","📉 布林通道"],["indicators","📈 RSI/KD"],["macd","〰 MACD"],
-              ["equity","💰 資金曲線"],["trades","📋 交易記錄"],["multi_stock","🔄 多股比較"],
-              ["compare_all","🏆 策略比較"],["ai_analysis","🤖 AI分析"],["guide","📖 策略說明"],
+              ["chart","📊 K線圖"],["bollinger","📉 布林"],["indicators","📈 RSI/KD"],["macd","〰 MACD"],
+              ["equity","💰 資金"],["trades","📋 交易"],["multi_stock","🔄 多股"],
+              ["compare_all","🏆 策略比較"],["ai_analysis","🤖 AI分析"],["guide","📖 說明"],
             ].map(([t,l]) => (
               <button key={t} style={tabBtn(t)} onClick={() => setActiveTab(t)}>{l}</button>
             ))}
           </div>
 
-          {/* K線圖 */}
-          {activeTab === "chart" && chartData.length > 0 && (
-            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
-              <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>{stockCode} K線圖 + 均線</h3>
-              <CandlestickChart data={stockData} trades={backtestResult?.trades} />
-              <div style={{ marginTop: 12 }}>
-                <ResponsiveContainer width="100%" height={120}>
-                  <ComposedChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#0d2a3a" />
-                    <XAxis dataKey="date" tick={{ fill: "#546e7a", fontSize: 10 }} interval={Math.floor(chartData.length/8)} />
-                    <YAxis tick={{ fill: "#546e7a", fontSize: 10 }} domain={["auto","auto"]} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Line type="monotone" dataKey="ma5" stroke="#ffd54f" dot={false} strokeWidth={1} name="MA5" />
-                    <Line type="monotone" dataKey="ma20" stroke="#ef9a9a" dot={false} strokeWidth={1} name="MA20" />
-                    <Line type="monotone" dataKey="ma60" stroke="#a5d6a7" dot={false} strokeWidth={1} name="MA60" />
-                  </ComposedChart>
-                </ResponsiveContainer>
+          {activeTab === "chart" && stockData && (
+            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h3 style={{ margin: 0, color: "#90caf9", fontSize: 13 }}>{stockCode} K線圖</h3>
+                <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
+                  <span style={{ color: "#ffd54f" }}>━ MA5</span>
+                  <span style={{ color: "#ef9a9a" }}>━ MA20</span>
+                  <span style={{ color: "#a5d6a7" }}>━ MA60</span>
+                </div>
               </div>
+              <CandlestickChart data={stockData} trades={backtestResult?.trades} chartData={chartData} />
             </div>
           )}
 
-          {/* 布林通道 */}
           {activeTab === "bollinger" && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
               <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>布林通道 (20, 2σ)</h3>
@@ -721,7 +739,6 @@ export default function App() {
             </div>
           )}
 
-          {/* RSI/KD */}
           {activeTab === "indicators" && (
             <div style={{ display: "grid", gap: 14 }}>
               {[
@@ -745,7 +762,6 @@ export default function App() {
             </div>
           )}
 
-          {/* MACD */}
           {activeTab === "macd" && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 10px", color: "#90caf9", fontSize: 13 }}>MACD (12, 26, 9)</h3>
@@ -758,7 +774,7 @@ export default function App() {
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <ReferenceLine y={0} stroke="#546e7a" strokeDasharray="4 2" />
                   <Bar dataKey="histogram" name="柱狀">
-                    {chartData.map((d, i) => <Cell key={i} fill={d.histogram >= 0 ? "#4caf5099" : "#ef535099"} />)}
+                    {chartData.map((d, i) => <Cell key={i} fill={d.histogram >= 0 ? "#ef535099" : "#4caf5099"} />)}
                   </Bar>
                   <Line type="monotone" dataKey="macd" stroke="#ffd54f" dot={false} strokeWidth={1.5} name="MACD線" />
                   <Line type="monotone" dataKey="signal" stroke="#ef9a9a" dot={false} strokeWidth={1.5} name="訊號線" />
@@ -767,7 +783,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 資金曲線 */}
           {activeTab === "equity" && backtestResult && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 10px", color: "#90caf9", fontSize: 13 }}>資金曲線</h3>
@@ -784,7 +799,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 交易記錄 */}
           {activeTab === "trades" && backtestResult && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>交易記錄（{backtestResult.trades.length} 筆）</h3>
@@ -810,7 +824,7 @@ export default function App() {
                         <td style={{ padding: "8px 12px", fontFamily: "monospace", color: parseFloat(t.profitPct)>0?"#4caf50":parseFloat(t.profitPct)<0?"#ef5350":"#90caf9" }}>
                           {t.profitPct!==undefined?`${parseFloat(t.profitPct)>0?"+":""}${t.profitPct}%`:"-"}
                         </td>
-                        <td style={{ padding: "8px 12px", color: t.reason==="停損"?"#ef5350":t.reason==="停利"?"#4caf50":"#546e7a", fontSize: 11 }}>{t.reason || "-"}</td>
+                        <td style={{ padding: "8px 12px", color: t.reason==="停損"?"#ef5350":t.reason==="停利"?"#4caf50":"#546e7a", fontSize: 11 }}>{t.reason||"-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -819,7 +833,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 多股比較 */}
           {activeTab === "multi_stock" && multiResults && (
             <div style={{ display: "grid", gap: 14 }}>
               <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
@@ -832,9 +845,7 @@ export default function App() {
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <ReferenceLine y={0} stroke="#546e7a" strokeDasharray="4 2" />
-                    {multiResults.map((r, i) => (
-                      <Line key={r.code} type="monotone" dataKey={r.code} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
-                    ))}
+                    {multiResults.map((r, i) => <Line key={r.code} type="monotone" dataKey={r.code} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />)}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -850,7 +861,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {multiResults.sort((a,b) => parseFloat(b.backtest.totalReturn) - parseFloat(a.backtest.totalReturn)).map((r, i) => (
+                      {[...multiResults].sort((a,b) => parseFloat(b.backtest.totalReturn) - parseFloat(a.backtest.totalReturn)).map((r, i) => (
                         <tr key={r.code} style={{ borderBottom: "1px solid #0d2a3a", background: i === 0 ? "#0d2a1a" : "transparent" }}>
                           <td style={{ padding: "10px 12px", color: COLORS[multiResults.indexOf(r) % COLORS.length], fontWeight: 700 }}>{i===0?"🥇 ":i===1?"🥈 ":i===2?"🥉 ":""}{r.code}</td>
                           <td style={{ padding: "10px 12px", fontFamily: "monospace", color: parseFloat(r.backtest.totalReturn)>=0?"#4caf50":"#ef5350", fontWeight: 700 }}>{parseFloat(r.backtest.totalReturn)>=0?"+":""}{r.backtest.totalReturn}%</td>
@@ -867,7 +878,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 策略比較 */}
           {activeTab === "compare_all" && allResults && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 16px", color: "#90caf9", fontSize: 13 }}>🏆 所有策略回測比較 — {stockCode}</h3>
@@ -898,33 +908,39 @@ export default function App() {
             </div>
           )}
 
-          {/* AI 分析 */}
           {activeTab === "ai_analysis" && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
               <h3 style={{ margin: "0 0 16px", color: "#90caf9", fontSize: 13 }}>🤖 Claude AI 回測分析</h3>
-              {!backtestResult ? (
-                <div style={{ color: "#546e7a", fontSize: 13, textAlign: "center", padding: 40 }}>請先執行回測再進行 AI 分析</div>
+              {!stockData ? (
+                <div style={{ color: "#546e7a", fontSize: 13, textAlign: "center", padding: 40 }}>請先點「開始分析」執行回測，再進行 AI 分析</div>
               ) : (
                 <>
-                  <div style={{ background: "#0d1b26", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 12, color: "#546e7a" }}>
-                    <div style={{ color: "#90caf9", marginBottom: 8, fontWeight: 600 }}>回測摘要</div>
-                    <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                      <span>股票：<span style={{ color: "#e0f0ff" }}>{stockCode}</span></span>
-                      <span>策略：<span style={{ color: "#e0f0ff" }}>{STRATEGIES[strategy]?.name}</span></span>
-                      <span>報酬率：<span style={{ color: parseFloat(backtestResult.totalReturn) >= 0 ? "#4caf50" : "#ef5350" }}>{backtestResult.totalReturn}%</span></span>
-                      <span>勝率：<span style={{ color: "#64b5f6" }}>{backtestResult.winRate}%</span></span>
-                      <span>最大回撤：<span style={{ color: "#ff7043" }}>-{backtestResult.maxDrawdown}%</span></span>
+                  {backtestResult && (
+                    <div style={{ background: "#0d1b26", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 12 }}>
+                      <div style={{ color: "#90caf9", marginBottom: 8, fontWeight: 600 }}>回測摘要</div>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", color: "#546e7a" }}>
+                        <span>股票：<span style={{ color: "#e0f0ff" }}>{stockCode}</span></span>
+                        <span>策略：<span style={{ color: "#e0f0ff" }}>{STRATEGIES[strategy]?.name}</span></span>
+                        <span>報酬率：<span style={{ color: parseFloat(backtestResult.totalReturn)>=0?"#4caf50":"#ef5350" }}>{backtestResult.totalReturn}%</span></span>
+                        <span>勝率：<span style={{ color: "#64b5f6" }}>{backtestResult.winRate}%</span></span>
+                        <span>最大回撤：<span style={{ color: "#ff7043" }}>-{backtestResult.maxDrawdown}%</span></span>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  {!backtestResult && (
+                    <div style={{ color: "#ffd54f", fontSize: 12, marginBottom: 12, padding: "8px 12px", background: "#1a1500", borderRadius: 6, borderLeft: "3px solid #ffd54f" }}>
+                      ⚠️ 資料已載入但尚未執行回測，請點「開始分析」後再使用 AI 分析
+                    </div>
+                  )}
                   {!claudeKey && (
                     <div style={{ color: "#ffd54f", fontSize: 12, marginBottom: 12, padding: "8px 12px", background: "#1a1500", borderRadius: 6, borderLeft: "3px solid #ffd54f" }}>
                       ⚠️ 請在上方輸入 Claude API Key 才能使用 AI 分析功能
                     </div>
                   )}
-                  <button onClick={handleClaudeAnalysis} disabled={claudeLoading || !claudeKey} style={{
-                    background: claudeKey ? "linear-gradient(135deg,#6a1b9a,#1565c0)" : "#1e3a4f",
+                  <button onClick={handleClaudeAnalysis} disabled={claudeLoading || !claudeKey || !backtestResult} style={{
+                    background: (claudeKey && backtestResult) ? "linear-gradient(135deg,#6a1b9a,#1565c0)" : "#1e3a4f",
                     border: "none", borderRadius: 8, color: "#fff", padding: "10px 24px",
-                    fontSize: 13, fontWeight: 700, cursor: claudeKey ? "pointer" : "not-allowed", marginBottom: 16,
+                    fontSize: 13, fontWeight: 700, cursor: (claudeKey && backtestResult) ? "pointer" : "not-allowed", marginBottom: 16,
                   }}>
                     {claudeLoading ? "🤖 分析中..." : "🤖 開始 AI 分析"}
                   </button>
@@ -938,7 +954,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 策略說明 */}
           {activeTab === "guide" && (
             <div style={{ display: "grid", gap: 14 }}>
               {STRATEGY_DETAILS.map(({ type, items }) => (
@@ -956,7 +971,7 @@ export default function App() {
                       {items.map(({ name, lines, meaning }) => (
                         <tr key={name} style={{ borderBottom: "1px solid #0d2a3a" }}>
                           <td style={{ padding: "10px 14px", color: "#64b5f6", fontWeight: 600, whiteSpace: "nowrap" }}>{name}</td>
-                          <td style={{ padding: "10px 14px", color: "#ffd54f", fontSize: 11 }}>{lines}</td>
+                          <td style={{ padding: "10px 14px", color: "#ffd54f", fontSize: 11, whiteSpace: "nowrap" }}>{lines}</td>
                           <td style={{ padding: "10px 14px", color: "#90caf9", lineHeight: 1.6 }}>{meaning}</td>
                         </tr>
                       ))}
@@ -964,7 +979,6 @@ export default function App() {
                   </table>
                 </div>
               ))}
-
               <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
                 <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>🎯 選策略的原則</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
