@@ -47,6 +47,7 @@ const MARKET_STRATEGY = [
   { market: "不確定市場", strategies: ["RSI + MA 組合", "自訂策略"], color: "#ce93d8" },
 ];
 
+// ─── 技術指標 ─────────────────────────────────────────────
 function calcMA(data, period) {
   return data.map((_, i) => {
     if (i < period - 1) return null;
@@ -112,6 +113,7 @@ function calcMaxDrawdown(equity, initial) {
   return maxDD.toFixed(2);
 }
 
+// ─── 回測引擎 ─────────────────────────────────────────────
 function runBacktest(data, strategy, params, initialCapital, stopLossPct, takeProfitPct) {
   const ma5 = calcMA(data, 5), ma20 = calcMA(data, 20), ma60 = calcMA(data, 60);
   const rsi = calcRSI(data, 14);
@@ -122,7 +124,6 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
   const avgVol5 = calcMA(data.map(v => ({ close: v.volume })), 5);
   const high20 = data.map((_, i) => i < 20 ? null : Math.max(...data.slice(i - 20, i).map(d => d.high)));
   const low10 = data.map((_, i) => i < 10 ? null : Math.min(...data.slice(i - 10, i).map(d => d.low)));
-
   let capital = initialCapital, shares = 0, inPosition = false, buyPrice = 0;
   const trades = [], equity = [];
   const slPct = stopLossPct / 100, tpPct = takeProfitPct / 100;
@@ -130,59 +131,32 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
   for (let i = 1; i < data.length; i++) {
     const price = data[i].close;
     let buySignal = false, sellSignal = false, sellReason = "";
-
     if (inPosition) {
       if (slPct > 0 && price <= buyPrice * (1 - slPct)) { sellSignal = true; sellReason = "停損"; }
       if (tpPct > 0 && price >= buyPrice * (1 + tpPct)) { sellSignal = true; sellReason = "停利"; }
     }
-
     if (!sellSignal) {
       if (strategy === "ma_cross") {
-        if (ma5[i] && ma20[i] && ma5[i-1] && ma20[i-1]) {
-          buySignal = ma5[i] > ma20[i] && ma5[i-1] <= ma20[i-1];
-          sellSignal = ma5[i] < ma20[i] && ma5[i-1] >= ma20[i-1];
-        }
+        if (ma5[i] && ma20[i] && ma5[i-1] && ma20[i-1]) { buySignal = ma5[i] > ma20[i] && ma5[i-1] <= ma20[i-1]; sellSignal = ma5[i] < ma20[i] && ma5[i-1] >= ma20[i-1]; }
       } else if (strategy === "ma_triple") {
-        if (ma5[i] && ma20[i] && ma60[i] && ma5[i-1] && ma20[i-1] && ma60[i-1]) {
-          const now = ma5[i] > ma20[i] && ma20[i] > ma60[i];
-          const prev = ma5[i-1] > ma20[i-1] && ma20[i-1] > ma60[i-1];
-          buySignal = now && !prev; sellSignal = !now && prev;
-        }
+        if (ma5[i] && ma20[i] && ma60[i] && ma5[i-1] && ma20[i-1] && ma60[i-1]) { const now = ma5[i] > ma20[i] && ma20[i] > ma60[i]; const prev = ma5[i-1] > ma20[i-1] && ma20[i-1] > ma60[i-1]; buySignal = now && !prev; sellSignal = !now && prev; }
       } else if (strategy === "rsi_oversold") {
-        if (rsi[i] !== null && rsi[i-1] !== null) {
-          buySignal = rsi[i-1] < 30 && rsi[i] >= 30;
-          sellSignal = rsi[i] > 70;
-        }
+        if (rsi[i] !== null && rsi[i-1] !== null) { buySignal = rsi[i-1] < 30 && rsi[i] >= 30; sellSignal = rsi[i] > 70; }
       } else if (strategy === "kd_cross") {
-        if (k[i] && d[i] && k[i-1] && d[i-1]) {
-          buySignal = k[i] > d[i] && k[i-1] <= d[i-1] && k[i] < 50;
-          sellSignal = k[i] < d[i] && k[i-1] >= d[i-1] && k[i] > 50;
-        }
+        if (k[i] && d[i] && k[i-1] && d[i-1]) { buySignal = k[i] > d[i] && k[i-1] <= d[i-1] && k[i] < 50; sellSignal = k[i] < d[i] && k[i-1] >= d[i-1] && k[i] > 50; }
       } else if (strategy === "macd_cross") {
-        if (macdLine[i] && signal[i] && macdLine[i-1] && signal[i-1]) {
-          buySignal = macdLine[i] > signal[i] && macdLine[i-1] <= signal[i-1];
-          sellSignal = macdLine[i] < signal[i] && macdLine[i-1] >= signal[i-1];
-        }
+        if (macdLine[i] && signal[i] && macdLine[i-1] && signal[i-1]) { buySignal = macdLine[i] > signal[i] && macdLine[i-1] <= signal[i-1]; sellSignal = macdLine[i] < signal[i] && macdLine[i-1] >= signal[i-1]; }
       } else if (strategy === "bollinger") {
-        if (boll[i].upper && boll[i-1].upper) {
-          buySignal = data[i-1].close <= boll[i-1].lower && price > boll[i].lower;
-          sellSignal = price > boll[i].upper;
-        }
+        if (boll[i].upper && boll[i-1].upper) { buySignal = data[i-1].close <= boll[i-1].lower && price > boll[i].lower; sellSignal = price > boll[i].upper; }
       } else if (strategy === "bollinger_revert") {
         if (boll[i].upper) { buySignal = price <= boll[i].lower; sellSignal = price >= boll[i].upper; }
       } else if (strategy === "volume_breakout") {
-        const avgV = avgVol5[i], prevHigh = i > 1 ? Math.max(...data.slice(Math.max(0, i-5), i).map(d => d.high)) : null;
-        if (avgV && prevHigh && ma20[i]) {
-          buySignal = volumes[i] > avgV * 2 && price > prevHigh && price > ma20[i];
-          sellSignal = inPosition && (price < ma20[i] || (rsi[i] && rsi[i] > 75));
-        }
+        const avgV = avgVol5[i]; const prevHigh = i > 1 ? Math.max(...data.slice(Math.max(0, i-5), i).map(d => d.high)) : null;
+        if (avgV && prevHigh && ma20[i]) { buySignal = volumes[i] > avgV * 2 && price > prevHigh && price > ma20[i]; sellSignal = inPosition && (price < ma20[i] || (rsi[i] && rsi[i] > 75)); }
       } else if (strategy === "turtle") {
         if (high20[i] && low10[i]) { buySignal = price > high20[i]; sellSignal = price < low10[i]; }
       } else if (strategy === "rsi_ma") {
-        if (rsi[i] && ma20[i] && rsi[i-1] && ma20[i-1]) {
-          buySignal = rsi[i] > 40 && rsi[i] < 65 && price > ma20[i] && !(rsi[i-1] > 40 && rsi[i-1] < 65 && data[i-1].close > ma20[i-1]);
-          sellSignal = rsi[i] > 70 || price < ma20[i];
-        }
+        if (rsi[i] && ma20[i] && rsi[i-1] && ma20[i-1]) { buySignal = rsi[i] > 40 && rsi[i] < 65 && price > ma20[i] && !(rsi[i-1] > 40 && rsi[i-1] < 65 && data[i-1].close > ma20[i-1]); sellSignal = rsi[i] > 70 || price < ma20[i]; }
       } else if (strategy === "custom") {
         const conds = [];
         if (params.useMA && ma5[i] && ma20[i]) conds.push(ma5[i] > ma20[i]);
@@ -198,7 +172,6 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
         sellSignal = sc.some(Boolean);
       }
     }
-
     if (buySignal && !inPosition && capital > price * 1000) {
       shares = Math.floor(capital / (price * 1000)) * 1000;
       capital -= shares * price; buyPrice = price; inPosition = true;
@@ -211,12 +184,10 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
     }
     equity.push({ date: data[i].date, value: capital + shares * price });
   }
-
   if (inPosition) {
     const lp = data[data.length - 1].close; capital += shares * lp;
     trades.push({ type: "sell", date: data[data.length-1].date, price: lp, shares, profit: (lp - buyPrice) * shares, profitPct: ((lp - buyPrice) / buyPrice * 100).toFixed(2), reason: "期末結算" });
   }
-
   const sells = trades.filter(t => t.type === "sell");
   return {
     trades, equity,
@@ -227,11 +198,11 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
   };
 }
 
+// ─── 資料抓取 ─────────────────────────────────────────────
 async function fetchYahoo(code, suffix, startTs, endTs, tStart, endDate) {
   try {
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
-    const res = await fetch(proxyUrl);
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`);
     if (!res.ok) return [];
     const wrapper = await res.json();
     const json = JSON.parse(wrapper.contents);
@@ -270,27 +241,29 @@ async function fetchMergedData(code, startDate, endDate, token) {
   return merged;
 }
 
-// ─── K線圖（修正版：支援 Tooltip + 滾輪縮放 + 不超出畫面）────
+// ─── K線圖元件 ────────────────────────────────────────────
 const CandlestickChart = ({ data, trades, chartData }) => {
-  const [viewRange, setViewRange] = useState({ start: 0, end: Math.min(data.length - 1, 59) });
+  const [viewRange, setViewRange] = useState({ start: Math.max(0, data.length - 60), end: data.length - 1 });
   const containerRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
+  const [crosshairX, setCrosshairX] = useState(null);
+  const [crosshairIdx, setCrosshairIdxState] = useState(null);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(null);
+  const dragRangeSnapshot = useRef(null);
 
   useEffect(() => {
-    const end = data.length - 1;
-    const start = Math.max(0, end - 59);
-    setViewRange({ start, end });
+    setViewRange({ start: Math.max(0, data.length - 60), end: data.length - 1 });
   }, [data.length]);
 
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 1 : -1;
     const range = viewRange.end - viewRange.start;
+    const delta = e.deltaY > 0 ? 1 : -1;
     const newRange = Math.max(20, Math.min(data.length, range + delta * Math.max(1, Math.ceil(range * 0.1))));
     const center = Math.floor((viewRange.start + viewRange.end) / 2);
     const newStart = Math.max(0, Math.min(data.length - newRange, center - Math.floor(newRange / 2)));
-    const newEnd = Math.min(data.length - 1, newStart + newRange - 1);
-    setViewRange({ start: newStart, end: newEnd });
+    setViewRange({ start: newStart, end: Math.min(data.length - 1, newStart + newRange - 1) });
   }, [viewRange, data.length]);
 
   useEffect(() => {
@@ -299,134 +272,177 @@ const CandlestickChart = ({ data, trades, chartData }) => {
     return () => { if (el) el.removeEventListener("wheel", handleWheel); };
   }, [handleWheel]);
 
+  const getSvgIdx = useCallback((clientX) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return -1;
+    const visible = viewRange.end - viewRange.start + 1;
+    const W = 800, PAD = 50;
+    const ratio = (W + PAD) / rect.width;
+    const svgX = (clientX - rect.left) * ratio;
+    return Math.floor((svgX - PAD / 2) / ((W - PAD / 2) / visible));
+  }, [viewRange]);
+
+  const handleMouseDown = useCallback((e) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragRangeSnapshot.current = { ...viewRange };
+  }, [viewRange]);
+
+  const handleMouseMove = useCallback((e) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const visible = viewRange.end - viewRange.start + 1;
+    const idx = getSvgIdx(e.clientX);
+
+    if (idx >= 0 && idx < visible) {
+      const W = 800, PAD = 50;
+      const colW = Math.max(2, Math.floor((W - PAD) / visible) - 1);
+      const x = PAD / 2 + idx * (W - PAD / 2) / visible + colW / 2;
+      setCrosshairX(x);
+      setCrosshairIdxState(idx);
+      const d = data[viewRange.start + idx];
+      if (d) {
+        const ma5v = chartData?.[viewRange.start + idx]?.ma5;
+        const ma20v = chartData?.[viewRange.start + idx]?.ma20;
+        const ma60v = chartData?.[viewRange.start + idx]?.ma60;
+        setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, data: d, ma5: ma5v, ma20: ma20v, ma60: ma60v });
+      }
+    } else {
+      setCrosshairX(null); setCrosshairIdxState(null); setTooltip(null);
+    }
+
+    if (isDragging.current && dragStartX.current !== null && dragRangeSnapshot.current) {
+      const dx = e.clientX - dragStartX.current;
+      const range = dragRangeSnapshot.current.end - dragRangeSnapshot.current.start;
+      const shift = -Math.round(dx / rect.width * visible * 1.2);
+      const newStart = Math.max(0, Math.min(data.length - 1 - range, dragRangeSnapshot.current.start + shift));
+      setViewRange({ start: newStart, end: Math.min(data.length - 1, newStart + range) });
+    }
+  }, [viewRange, data, chartData, getSvgIdx]);
+
+  const handleMouseUp = useCallback(() => { isDragging.current = false; dragStartX.current = null; }, []);
+  const handleMouseLeave = useCallback(() => { isDragging.current = false; dragStartX.current = null; setTooltip(null); setCrosshairX(null); setCrosshairIdxState(null); }, []);
+
   const visible = data.slice(viewRange.start, viewRange.end + 1);
   const W = 800, H = 260, PAD = 50, VOL_H = 50;
   const prices = visible.flatMap(d => [d.high, d.low]).filter(v => v && !isNaN(v));
+  if (prices.length === 0) return null;
   const minP = Math.min(...prices) * 0.997;
   const maxP = Math.max(...prices) * 1.003;
-  const pRange = maxP - minP;
-  const maxVol = Math.max(...visible.map(d => d.volume || 0));
+  const pRange = maxP - minP || 1;
+  const maxVol = Math.max(...visible.map(d => d.volume || 0)) || 1;
   const colW = Math.max(2, Math.floor((W - PAD) / visible.length) - 1);
   const toY = (p) => 8 + (1 - (p - minP) / pRange) * (H - 16);
+  const toX = (i) => PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
 
-  // 找出買賣點日期
   const buyDates = new Set(trades?.filter(t => t.type === "buy").map(t => t.date) || []);
   const sellDates = new Set(trades?.filter(t => t.type === "sell").map(t => t.date) || []);
 
-  const handleMouseMove = (e, d, i) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const ma5v = chartData?.[viewRange.start + i]?.ma5;
-    const ma20v = chartData?.[viewRange.start + i]?.ma20;
-    const ma60v = chartData?.[viewRange.start + i]?.ma60;
-    setTooltip({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      data: d, ma5: ma5v, ma20: ma20v, ma60: ma60v,
-    });
-  };
+  const crossMA = crosshairIdx !== null && crosshairIdx >= 0 && crosshairIdx < visible.length ? {
+    ma5: chartData?.[viewRange.start + crosshairIdx]?.ma5,
+    ma20: chartData?.[viewRange.start + crosshairIdx]?.ma20,
+    ma60: chartData?.[viewRange.start + crosshairIdx]?.ma60,
+  } : null;
 
   return (
-    <div ref={containerRef} style={{ position: "relative", userSelect: "none", width: "100%", overflowX: "hidden" }}>
-      <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 6, display: "flex", gap: 16, flexWrap: "wrap" }}>
-        <span>🖱 滾輪縮放</span>
+    <div ref={containerRef} style={{ position: "relative", userSelect: "none", width: "100%", cursor: isDragging.current ? "grabbing" : "crosshair" }}
+      onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave}>
+
+      <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 6, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <span>🖱 滾輪縮放 · 拖曳平移</span>
         <span>顯示 {visible.length} 根（共 {data.length} 根）</span>
-        <span style={{ color: "#ef5350" }}>▲ 紅色=漲</span>
-        <span style={{ color: "#4caf50" }}>▼ 綠色=跌</span>
-        <span style={{ color: "#4caf50" }}>▲ 買進點</span>
-        <span style={{ color: "#ef5350" }}>▼ 賣出點</span>
+        <span style={{ color: "#ffd54f" }}>━ MA5</span>
+        <span style={{ color: "#ef9a9a" }}>━ MA20</span>
+        <span style={{ color: "#a5d6a7" }}>━ MA60</span>
+        <span style={{ color: "#ef5350" }}>█ 漲</span>
+        <span style={{ color: "#4caf50" }}>█ 跌</span>
       </div>
 
-      {/* Tooltip */}
       {tooltip && (
         <div style={{
-          position: "absolute", left: tooltip.x + 12, top: Math.max(0, tooltip.y - 80),
+          position: "absolute",
+          left: tooltip.x > (containerRef.current?.offsetWidth || 500) * 0.6 ? tooltip.x - 155 : tooltip.x + 12,
+          top: Math.max(0, tooltip.y - 110),
           background: "#0f1923", border: "1px solid #1e3a4f", borderRadius: 8,
           padding: "8px 12px", fontSize: 11, zIndex: 10, pointerEvents: "none",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.5)", minWidth: 140,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.6)", minWidth: 145,
         }}>
-          <div style={{ color: "#64b5f6", fontWeight: 700, marginBottom: 4 }}>{tooltip.data.date}</div>
-          <div style={{ color: "#e0f0ff" }}>開：{tooltip.data.open?.toFixed(2)}</div>
-          <div style={{ color: "#e0f0ff" }}>高：{tooltip.data.high?.toFixed(2)}</div>
-          <div style={{ color: "#e0f0ff" }}>低：{tooltip.data.low?.toFixed(2)}</div>
-          <div style={{ color: tooltip.data.close >= tooltip.data.open ? "#ef5350" : "#4caf50", fontWeight: 700 }}>收：{tooltip.data.close?.toFixed(2)}</div>
-          {tooltip.ma5 && <div style={{ color: "#ffd54f" }}>MA5：{tooltip.ma5}</div>}
-          {tooltip.ma20 && <div style={{ color: "#ef9a9a" }}>MA20：{tooltip.ma20}</div>}
-          {tooltip.ma60 && <div style={{ color: "#a5d6a7" }}>MA60：{tooltip.ma60}</div>}
-          <div style={{ color: "#546e7a" }}>量：{(tooltip.data.volume / 1000).toFixed(0)}K</div>
+          <div style={{ color: "#64b5f6", fontWeight: 700, marginBottom: 5 }}>{tooltip.data.date}</div>
+          <div style={{ color: "#90caf9" }}>開：{tooltip.data.open?.toFixed(2)}</div>
+          <div style={{ color: "#90caf9" }}>高：{tooltip.data.high?.toFixed(2)}</div>
+          <div style={{ color: "#90caf9" }}>低：{tooltip.data.low?.toFixed(2)}</div>
+          <div style={{ color: tooltip.data.close >= tooltip.data.open ? "#ef5350" : "#4caf50", fontWeight: 700 }}>
+            收：{tooltip.data.close?.toFixed(2)}
+          </div>
+          <div style={{ borderTop: "1px solid #1e3a4f", marginTop: 4, paddingTop: 4 }}>
+            {tooltip.ma5 && <div style={{ color: "#ffd54f" }}>MA5：{tooltip.ma5}</div>}
+            {tooltip.ma20 && <div style={{ color: "#ef9a9a" }}>MA20：{tooltip.ma20}</div>}
+            {tooltip.ma60 && <div style={{ color: "#a5d6a7" }}>MA60：{tooltip.ma60}</div>}
+          </div>
+          <div style={{ color: "#546e7a", marginTop: 2 }}>量：{((tooltip.data.volume || 0) / 1000).toFixed(0)}K</div>
         </div>
       )}
 
-      <svg width="100%" viewBox={`0 0 ${W + PAD} ${H + VOL_H + 20}`} onMouseLeave={() => setTooltip(null)}>
-        {/* 價格格線 */}
+      <svg width="100%" viewBox={`0 0 ${W + PAD} ${H + VOL_H + 20}`} style={{ overflow: "visible" }}>
+        {/* 格線 */}
         {[0, 0.25, 0.5, 0.75, 1].map(r => {
-          const price = maxP - r * pRange;
-          const y = toY(price);
-          return (
-            <g key={r}>
-              <line x1={0} y1={y} x2={W} y2={y} stroke="#0d2a3a" strokeDasharray="4 4" />
-              <text x={W + 2} y={y + 4} fill="#546e7a" fontSize={9}>{price.toFixed(1)}</text>
-            </g>
-          );
+          const price = maxP - r * pRange; const y = toY(price);
+          return <g key={r}><line x1={0} y1={y} x2={W} y2={y} stroke="#0d2a3a" strokeDasharray="4 4" /><text x={W + 2} y={y + 4} fill="#546e7a" fontSize={9}>{price.toFixed(1)}</text></g>;
         })}
 
         {/* MA 線 */}
-        {["ma5", "ma20", "ma60"].map((maKey, mi) => {
-          const colors = ["#ffd54f", "#ef9a9a", "#a5d6a7"];
-          const points = visible.map((d, i) => {
-            const v = chartData?.[viewRange.start + i]?.[maKey];
-            if (!v) return null;
-            const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
-            return `${x},${toY(v)}`;
-          }).filter(Boolean);
-          if (points.length < 2) return null;
-          return <polyline key={maKey} points={points.join(" ")} fill="none" stroke={colors[mi]} strokeWidth={1} opacity={0.8} />;
+        {[{ key: "ma5", c: "#ffd54f" }, { key: "ma20", c: "#ef9a9a" }, { key: "ma60", c: "#a5d6a7" }].map(({ key, c }) => {
+          const pts = visible.map((_, i) => { const v = chartData?.[viewRange.start + i]?.[key]; return v ? `${toX(i)},${toY(v)}` : null; }).filter(Boolean);
+          return pts.length > 1 ? <polyline key={key} points={pts.join(" ")} fill="none" stroke={c} strokeWidth={1} opacity={0.85} /> : null;
         })}
 
         {/* K棒 */}
         {visible.map((d, i) => {
           if (!d.open || !d.close || !d.high || !d.low) return null;
-          const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
-          // 台灣習慣：漲=紅，跌=綠
+          const x = toX(i);
           const isUp = d.close >= d.open;
           const color = isUp ? "#ef5350" : "#4caf50";
           const bodyTop = toY(Math.max(d.open, d.close));
-          const bodyBot = toY(Math.min(d.open, d.close));
-          const bodyH = Math.max(1, bodyBot - bodyTop);
-          const highY = toY(d.high);
-          const lowY = toY(d.low);
-          const isBuy = buyDates.has(d.date);
-          const isSell = sellDates.has(d.date);
+          const bodyH = Math.max(1, toY(Math.min(d.open, d.close)) - bodyTop);
           return (
-            <g key={i} onMouseMove={(e) => handleMouseMove(e, d, i)} style={{ cursor: "crosshair" }}>
-              <line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth={1} />
-              <rect x={x - colW / 2} y={bodyTop} width={colW} height={bodyH} fill={color} stroke={color} strokeWidth={0.5} />
-              {isBuy && <text x={x} y={lowY + 12} textAnchor="middle" fill="#4caf50" fontSize={10} fontWeight="bold">▲</text>}
-              {isSell && <text x={x} y={highY - 4} textAnchor="middle" fill="#ef5350" fontSize={10} fontWeight="bold">▼</text>}
+            <g key={i}>
+              <line x1={x} y1={toY(d.high)} x2={x} y2={toY(d.low)} stroke={color} strokeWidth={1} />
+              <rect x={x - colW / 2} y={bodyTop} width={colW} height={bodyH} fill={color} />
+              {buyDates.has(d.date) && <text x={x} y={toY(d.low) + 12} textAnchor="middle" fill="#4caf50" fontSize={10} fontWeight="bold">▲</text>}
+              {sellDates.has(d.date) && <text x={x} y={toY(d.high) - 4} textAnchor="middle" fill="#ef5350" fontSize={10} fontWeight="bold">▼</text>}
             </g>
           );
         })}
 
-        {/* 日期標籤 */}
+        {/* 十字線 + MA 圓點 */}
+        {crosshairX !== null && (
+          <g>
+            <line x1={crosshairX} y1={0} x2={crosshairX} y2={H + VOL_H + 20} stroke="#64b5f6" strokeWidth={0.8} strokeDasharray="3 3" opacity={0.7} />
+            {crossMA?.ma5 && <circle cx={crosshairX} cy={toY(crossMA.ma5)} r={3.5} fill="#ffd54f" stroke="#060e17" strokeWidth={1.5} />}
+            {crossMA?.ma20 && <circle cx={crosshairX} cy={toY(crossMA.ma20)} r={3.5} fill="#ef9a9a" stroke="#060e17" strokeWidth={1.5} />}
+            {crossMA?.ma60 && <circle cx={crosshairX} cy={toY(crossMA.ma60)} r={3.5} fill="#a5d6a7" stroke="#060e17" strokeWidth={1.5} />}
+          </g>
+        )}
+
+        {/* 日期 */}
         {visible.filter((_, i) => i % Math.max(1, Math.ceil(visible.length / 7)) === 0).map((d, idx) => {
           const i = visible.indexOf(d);
-          const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
-          return <text key={idx} x={x} y={H + 14} fill="#546e7a" fontSize={8} textAnchor="middle">{d.date?.slice(5)}</text>;
+          return <text key={idx} x={toX(i)} y={H + 14} fill="#546e7a" fontSize={8} textAnchor="middle">{d.date?.slice(5)}</text>;
         })}
 
         {/* 成交量 */}
         {visible.map((d, i) => {
-          if (!d.volume || maxVol === 0) return null;
-          const x = PAD / 2 + i * (W - PAD / 2) / visible.length + colW / 2;
+          if (!d.volume) return null;
           const volH = (d.volume / maxVol) * (VOL_H - 4);
           const isUp = d.close >= d.open;
-          return <rect key={i} x={x - colW / 2} y={H + 20 + (VOL_H - 4 - volH)} width={colW} height={volH} fill={isUp ? "#ef535055" : "#4caf5055"} />;
+          return <rect key={i} x={toX(i) - colW / 2} y={H + 20 + VOL_H - 4 - volH} width={colW} height={volH} fill={isUp ? "#ef535055" : "#4caf5055"} />;
         })}
       </svg>
     </div>
   );
 };
 
+// ─── UI 元件 ──────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -456,6 +472,7 @@ const ErrorModal = ({ message, onClose }) => {
   );
 };
 
+// ─── 主元件 ───────────────────────────────────────────────
 export default function App() {
   const [stockCode, setStockCode] = useState("2330");
   const [startDate, setStartDate] = useState("2024-01-01");
@@ -515,9 +532,7 @@ export default function App() {
     setLoading(true); setLoadingMsg("🔬 比較所有策略中...");
     try {
       const results = {};
-      for (const [key] of Object.entries(STRATEGIES)) {
-        results[key] = runBacktest(stockData, key, key === "custom" ? customParams : {}, initialCapital, stopLoss, takeProfit);
-      }
+      for (const [key] of Object.entries(STRATEGIES)) results[key] = runBacktest(stockData, key, key === "custom" ? customParams : {}, initialCapital, stopLoss, takeProfit);
       setAllResults(results); setActiveTab("compare_all");
     } catch(e) { setError(e.message); }
     setLoading(false); setLoadingMsg("");
@@ -526,17 +541,15 @@ export default function App() {
   const handleMultiStock = async () => {
     if (!finmindToken) { setError("請先輸入 FinMind Token"); return; }
     const codes = multiCodes.split(",").map(c => c.trim()).filter(Boolean);
-    if (codes.length < 2) { setError("請輸入至少兩個股票代號，用逗號分隔"); return; }
-    setLoading(true); setLoadingMsg("📡 抓取多股資料中...");
+    if (codes.length < 2) { setError("請輸入至少兩個股票代號"); return; }
+    setLoading(true);
     try {
       const results = [];
       for (const code of codes) {
         setLoadingMsg(`📡 抓取 ${code} 中...`);
         const data = await fetchMergedData(code, startDate, endDate, finmindToken);
         const first = data[0].close;
-        const normalized = data.map(d => ({ date: d.date.slice(5), [code]: +((d.close - first) / first * 100).toFixed(2) }));
-        const bt = runBacktest(data, strategy, strategy === "custom" ? customParams : {}, initialCapital, stopLoss, takeProfit);
-        results.push({ code, normalized, backtest: bt });
+        results.push({ code, normalized: data.map(d => ({ date: d.date.slice(5), [code]: +((d.close - first) / first * 100).toFixed(2) })), backtest: runBacktest(data, strategy, strategy === "custom" ? customParams : {}, initialCapital, stopLoss, takeProfit) });
       }
       setMultiResults(results); setActiveTab("multi_stock");
     } catch(e) { setError(e.message); }
@@ -548,15 +561,14 @@ export default function App() {
     if (!backtestResult) { setError("請先執行回測再進行 AI 分析"); return; }
     setClaudeLoading(true); setClaudeAnalysis("");
     try {
-      const summary = `股票：${stockCode}\n策略：${STRATEGIES[strategy]?.name}\n時間：${startDate} ~ ${endDate}\n初始資金：${(initialCapital/10000).toFixed(0)}萬元\n停損：${stopLoss > 0 ? stopLoss + "%" : "無"}\n停利：${takeProfit > 0 ? takeProfit + "%" : "無"}\n總報酬率：${backtestResult.totalReturn}%\n勝率：${backtestResult.winRate}%（${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗）\n最大回撤：${backtestResult.maxDrawdown}%\n最終資金：${(backtestResult.finalCapital/10000).toFixed(0)}萬元\n交易次數：${backtestResult.sellTrades.length}次\n最近5筆：${backtestResult.sellTrades.slice(-5).map(t => `${t.date} ${t.profitPct}%(${t.reason})`).join("、")}`;
+      const summary = `股票：${stockCode}\n策略：${STRATEGIES[strategy]?.name}\n時間：${startDate} ~ ${endDate}\n初始資金：${(initialCapital/10000).toFixed(0)}萬\n停損：${stopLoss > 0 ? stopLoss + "%" : "無"}\n停利：${takeProfit > 0 ? takeProfit + "%" : "無"}\n總報酬率：${backtestResult.totalReturn}%\n勝率：${backtestResult.winRate}%（${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗）\n最大回撤：${backtestResult.maxDrawdown}%\n最終資金：${(backtestResult.finalCapital/10000).toFixed(0)}萬\n交易次數：${backtestResult.sellTrades.length}次\n最近5筆：${backtestResult.sellTrades.slice(-5).map(t => `${t.date} ${t.profitPct}%(${t.reason})`).join("、")}`;
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           apiKey: claudeKey,
           body: {
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 800,
+            model: "claude-haiku-4-5-20251001", max_tokens: 800,
             messages: [{ role: "user", content: `你是台股量化分析師，以下是一個回測結果，請給出專業分析和改進建議：\n\n${summary}\n\n請用以下格式回答，不要使用Markdown符號：\n\n📊 整體評估：\n（評估這個策略的表現好壞，50字以內）\n\n✅ 優點：\n（列出2-3個策略的優點）\n\n⚠️ 缺點與風險：\n（列出2-3個需要注意的問題）\n\n💡 改進建議：\n（給出3個具體的改進方向）\n\n🎯 結論：\n（是否建議使用這個策略，30字以內）` }],
           }
         }),
@@ -580,12 +592,11 @@ export default function App() {
   const COLORS = ["#64b5f6", "#ffd54f", "#a5d6a7", "#f48fb1", "#ce93d8", "#80cbc4"];
   const mergedMulti = multiResults ? (() => {
     const allDates = [...new Set(multiResults.flatMap(r => r.normalized.map(d => d.date)))].sort();
-    return allDates.map(date => {
-      const row = { date };
-      multiResults.forEach(r => { const pt = r.normalized.find(d => d.date === date); if (pt) row[r.code] = pt[r.code]; });
-      return row;
-    });
+    return allDates.map(date => { const row = { date }; multiResults.forEach(r => { const pt = r.normalized.find(d => d.date === date); if (pt) row[r.code] = pt[r.code]; }); return row; });
   })() : [];
+
+  // 損益顏色：賺=紅，賠=綠（台灣習慣）
+  const profitColor = (val) => parseFloat(val) > 0 ? "#ef5350" : parseFloat(val) < 0 ? "#4caf50" : "#90caf9";
 
   return (
     <div style={{ background: "#060e17", minHeight: "100vh", color: "#e0f0ff", fontFamily: "'Segoe UI', sans-serif", padding: "20px" }}>
@@ -626,11 +637,11 @@ export default function App() {
         <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 140 }}>
             <label style={{ color: "#ef5350", fontSize: 10, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>停損 % (0=不設定)</label>
-            <input style={{ ...inp, borderColor: stopLoss > 0 ? "#ef5350" : "#1e3a4f" }} type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} min={0} max={50} placeholder="例如 5 = -5%" />
+            <input style={{ ...inp, borderColor: stopLoss > 0 ? "#ef5350" : "#1e3a4f" }} type="number" value={stopLoss} onChange={e => setStopLoss(Number(e.target.value))} min={0} max={50} />
           </div>
           <div style={{ flex: 1, minWidth: 140 }}>
             <label style={{ color: "#4caf50", fontSize: 10, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>停利 % (0=不設定)</label>
-            <input style={{ ...inp, borderColor: takeProfit > 0 ? "#4caf50" : "#1e3a4f" }} type="number" value={takeProfit} onChange={e => setTakeProfit(Number(e.target.value))} min={0} max={200} placeholder="例如 15 = +15%" />
+            <input style={{ ...inp, borderColor: takeProfit > 0 ? "#4caf50" : "#1e3a4f" }} type="number" value={takeProfit} onChange={e => setTakeProfit(Number(e.target.value))} min={0} max={200} />
           </div>
           <div style={{ flex: 2, minWidth: 200 }}>
             <label style={{ color: "#ffd54f", fontSize: 10, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>多股比較（逗號分隔）</label>
@@ -645,22 +656,13 @@ export default function App() {
           <label style={{ color: "#546e7a", fontSize: 10, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>回測策略</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {Object.entries(STRATEGIES).map(([key, s]) => (
-              <button key={key} onClick={() => setStrategy(key)} style={{
-                padding: "6px 12px", borderRadius: 6, border: `1px solid ${strategy === key ? s.color : "#1e3a4f"}`,
-                background: strategy === key ? `${s.color}22` : "transparent",
-                color: strategy === key ? s.color : "#78909c",
-                cursor: "pointer", fontSize: 12, fontWeight: strategy === key ? 700 : 400, display: "flex", alignItems: "center", gap: 4,
-              }}>
+              <button key={key} onClick={() => setStrategy(key)} style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${strategy === key ? s.color : "#1e3a4f"}`, background: strategy === key ? `${s.color}22` : "transparent", color: strategy === key ? s.color : "#78909c", cursor: "pointer", fontSize: 12, fontWeight: strategy === key ? 700 : 400, display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ fontSize: 9, background: strategy === key ? s.color : "#1e3a4f", color: strategy === key ? "#000" : "#546e7a", borderRadius: 3, padding: "1px 5px" }}>{s.tag}</span>
                 {s.name}
               </button>
             ))}
           </div>
-          {STRATEGIES[strategy] && (
-            <div style={{ color: "#546e7a", fontSize: 11, marginTop: 8, padding: "6px 10px", background: "#0d1b26", borderRadius: 6, borderLeft: `3px solid ${STRATEGIES[strategy].color}` }}>
-              💡 {STRATEGIES[strategy].desc}
-            </div>
-          )}
+          {STRATEGIES[strategy] && <div style={{ color: "#546e7a", fontSize: 11, marginTop: 8, padding: "6px 10px", background: "#0d1b26", borderRadius: 6, borderLeft: `3px solid ${STRATEGIES[strategy].color}` }}>💡 {STRATEGIES[strategy].desc}</div>}
         </div>
 
         {strategy === "custom" && (
@@ -688,38 +690,27 @@ export default function App() {
 
       {backtestResult && (
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          {statBox("總報酬率", `${backtestResult.totalReturn}%`, parseFloat(backtestResult.totalReturn) >= 0 ? "#4caf50" : "#ef5350")}
+          {statBox("總報酬率", `${backtestResult.totalReturn}%`, profitColor(backtestResult.totalReturn))}
           {statBox("勝率", `${backtestResult.winRate}%`, "#64b5f6", `${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗`)}
           {statBox("最大回撤", `-${backtestResult.maxDrawdown}%`, "#ff7043")}
-          {statBox("最終資金", `${(backtestResult.finalCapital/10000).toFixed(0)}萬`, "#4caf50", `初始${(initialCapital/10000).toFixed(0)}萬`)}
+          {statBox("最終資金", `${(backtestResult.finalCapital/10000).toFixed(0)}萬`, profitColor(backtestResult.totalReturn), `初始${(initialCapital/10000).toFixed(0)}萬`)}
           {statBox("交易次數", backtestResult.sellTrades.length, "#ce93d8", "已完成")}
-          {stopLoss > 0 && statBox("停損觸發", backtestResult.sellTrades.filter(t=>t.reason==="停損").length, "#ef5350", `${stopLoss}%`)}
-          {takeProfit > 0 && statBox("停利觸發", backtestResult.sellTrades.filter(t=>t.reason==="停利").length, "#4caf50", `${takeProfit}%`)}
+          {stopLoss > 0 && statBox("停損觸發", backtestResult.sellTrades.filter(t=>t.reason==="停損").length, "#4caf50", `${stopLoss}%`)}
+          {takeProfit > 0 && statBox("停利觸發", backtestResult.sellTrades.filter(t=>t.reason==="停利").length, "#ef5350", `${takeProfit}%`)}
         </div>
       )}
 
       {(chartData.length > 0 || multiResults) && (
         <>
           <div style={{ display: "flex", gap: 3, marginBottom: 14, background: "#0a1520", padding: 5, borderRadius: 8, flexWrap: "wrap" }}>
-            {[
-              ["chart","📊 K線圖"],["bollinger","📉 布林"],["indicators","📈 RSI/KD"],["macd","〰 MACD"],
-              ["equity","💰 資金"],["trades","📋 交易"],["multi_stock","🔄 多股"],
-              ["compare_all","🏆 策略比較"],["ai_analysis","🤖 AI分析"],["guide","📖 說明"],
-            ].map(([t,l]) => (
+            {[["chart","📊 K線圖"],["bollinger","📉 布林"],["indicators","📈 RSI/KD"],["macd","〰 MACD"],["equity","💰 資金"],["trades","📋 交易"],["multi_stock","🔄 多股"],["compare_all","🏆 策略比較"],["ai_analysis","🤖 AI分析"],["guide","📖 說明"]].map(([t,l]) => (
               <button key={t} style={tabBtn(t)} onClick={() => setActiveTab(t)}>{l}</button>
             ))}
           </div>
 
           {activeTab === "chart" && stockData && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <h3 style={{ margin: 0, color: "#90caf9", fontSize: 13 }}>{stockCode} K線圖</h3>
-                <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
-                  <span style={{ color: "#ffd54f" }}>━ MA5</span>
-                  <span style={{ color: "#ef9a9a" }}>━ MA20</span>
-                  <span style={{ color: "#a5d6a7" }}>━ MA60</span>
-                </div>
-              </div>
+              <h3 style={{ margin: "0 0 12px", color: "#90caf9", fontSize: 13 }}>{stockCode} K線圖</h3>
               <CandlestickChart data={stockData} trades={backtestResult?.trades} chartData={chartData} />
             </div>
           )}
@@ -777,9 +768,7 @@ export default function App() {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <ReferenceLine y={0} stroke="#546e7a" strokeDasharray="4 2" />
-                  <Bar dataKey="histogram" name="柱狀">
-                    {chartData.map((d, i) => <Cell key={i} fill={d.histogram >= 0 ? "#ef535099" : "#4caf5099"} />)}
-                  </Bar>
+                  <Bar dataKey="histogram" name="柱狀">{chartData.map((d, i) => <Cell key={i} fill={d.histogram >= 0 ? "#ef535099" : "#4caf5099"} />)}</Bar>
                   <Line type="monotone" dataKey="macd" stroke="#ffd54f" dot={false} strokeWidth={1.5} name="MACD線" />
                   <Line type="monotone" dataKey="signal" stroke="#ef9a9a" dot={false} strokeWidth={1.5} name="訊號線" />
                 </ComposedChart>
@@ -797,7 +786,7 @@ export default function App() {
                   <YAxis tick={{ fill: "#546e7a", fontSize: 10 }} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
                   <Tooltip content={<CustomTooltip />} formatter={v => [`${(v/10000).toFixed(1)}萬`,"資金"]} />
                   <ReferenceLine y={initialCapital} stroke="#546e7a" strokeDasharray="4 2" />
-                  <Line type="monotone" dataKey="value" stroke="#4caf50" dot={false} strokeWidth={2} name="資金" />
+                  <Line type="monotone" dataKey="value" stroke="#ef5350" dot={false} strokeWidth={2} name="資金" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -822,13 +811,13 @@ export default function App() {
                         <td style={{ padding: "8px 12px", color: "#90caf9" }}>{t.date}</td>
                         <td style={{ padding: "8px 12px", fontFamily: "monospace" }}>{t.price.toFixed(2)}</td>
                         <td style={{ padding: "8px 12px", fontFamily: "monospace" }}>{t.shares?.toLocaleString()}</td>
-                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: t.profit>0?"#4caf50":t.profit<0?"#ef5350":"#90caf9" }}>
-                          {t.profit!==undefined?`${t.profit>0?"+":""}${t.profit.toFixed(0)}`:"-"}
+                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: t.profit !== undefined ? profitColor(t.profit) : "#90caf9" }}>
+                          {t.profit !== undefined ? `${t.profit > 0 ? "+" : ""}${t.profit.toFixed(0)}` : "-"}
                         </td>
-                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: parseFloat(t.profitPct)>0?"#4caf50":parseFloat(t.profitPct)<0?"#ef5350":"#90caf9" }}>
-                          {t.profitPct!==undefined?`${parseFloat(t.profitPct)>0?"+":""}${t.profitPct}%`:"-"}
+                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: t.profitPct !== undefined ? profitColor(t.profitPct) : "#90caf9" }}>
+                          {t.profitPct !== undefined ? `${parseFloat(t.profitPct) > 0 ? "+" : ""}${t.profitPct}%` : "-"}
                         </td>
-                        <td style={{ padding: "8px 12px", color: t.reason==="停損"?"#ef5350":t.reason==="停利"?"#4caf50":"#546e7a", fontSize: 11 }}>{t.reason||"-"}</td>
+                        <td style={{ padding: "8px 12px", color: t.reason==="停損"?"#4caf50":t.reason==="停利"?"#ef5350":"#546e7a", fontSize: 11 }}>{t.reason||"-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -868,11 +857,11 @@ export default function App() {
                       {[...multiResults].sort((a,b) => parseFloat(b.backtest.totalReturn) - parseFloat(a.backtest.totalReturn)).map((r, i) => (
                         <tr key={r.code} style={{ borderBottom: "1px solid #0d2a3a", background: i === 0 ? "#0d2a1a" : "transparent" }}>
                           <td style={{ padding: "10px 12px", color: COLORS[multiResults.indexOf(r) % COLORS.length], fontWeight: 700 }}>{i===0?"🥇 ":i===1?"🥈 ":i===2?"🥉 ":""}{r.code}</td>
-                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: parseFloat(r.backtest.totalReturn)>=0?"#4caf50":"#ef5350", fontWeight: 700 }}>{parseFloat(r.backtest.totalReturn)>=0?"+":""}{r.backtest.totalReturn}%</td>
+                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: profitColor(r.backtest.totalReturn), fontWeight: 700 }}>{parseFloat(r.backtest.totalReturn)>=0?"+":""}{r.backtest.totalReturn}%</td>
                           <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#64b5f6" }}>{r.backtest.winRate}%</td>
                           <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#ff7043" }}>-{r.backtest.maxDrawdown}%</td>
                           <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#ce93d8" }}>{r.backtest.sellTrades.length}</td>
-                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: r.backtest.finalCapital>=initialCapital?"#4caf50":"#ef5350" }}>{(r.backtest.finalCapital/10000).toFixed(0)}萬</td>
+                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: profitColor(r.backtest.totalReturn) }}>{(r.backtest.finalCapital/10000).toFixed(0)}萬</td>
                         </tr>
                       ))}
                     </tbody>
@@ -899,11 +888,11 @@ export default function App() {
                       <tr key={key} style={{ borderBottom: "1px solid #0d2a3a", background: i === 0 ? "#0d2a1a" : "transparent" }}>
                         <td style={{ padding: "10px 12px", color: STRATEGIES[key].color, fontWeight: 600 }}>{i===0?"🥇 ":i===1?"🥈 ":i===2?"🥉 ":""}{STRATEGIES[key].name}</td>
                         <td style={{ padding: "10px 12px" }}><span style={{ fontSize: 10, background: "#1e3a4f", color: "#90caf9", borderRadius: 3, padding: "2px 6px" }}>{STRATEGIES[key].tag}</span></td>
-                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: parseFloat(r.totalReturn)>=0?"#4caf50":"#ef5350", fontWeight: 700 }}>{parseFloat(r.totalReturn)>=0?"+":""}{r.totalReturn}%</td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: profitColor(r.totalReturn), fontWeight: 700 }}>{parseFloat(r.totalReturn)>=0?"+":""}{r.totalReturn}%</td>
                         <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#64b5f6" }}>{r.winRate}%</td>
                         <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#ff7043" }}>-{r.maxDrawdown}%</td>
                         <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#ce93d8" }}>{r.sellTrades.length}</td>
-                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: r.finalCapital>=initialCapital?"#4caf50":"#ef5350" }}>{(r.finalCapital/10000).toFixed(0)}萬</td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: profitColor(r.totalReturn) }}>{(r.finalCapital/10000).toFixed(0)}萬</td>
                       </tr>
                     ))}
                   </tbody>
@@ -925,7 +914,7 @@ export default function App() {
                       <div style={{ display: "flex", gap: 20, flexWrap: "wrap", color: "#546e7a" }}>
                         <span>股票：<span style={{ color: "#e0f0ff" }}>{stockCode}</span></span>
                         <span>策略：<span style={{ color: "#e0f0ff" }}>{STRATEGIES[strategy]?.name}</span></span>
-                        <span>報酬率：<span style={{ color: parseFloat(backtestResult.totalReturn)>=0?"#4caf50":"#ef5350" }}>{backtestResult.totalReturn}%</span></span>
+                        <span>報酬率：<span style={{ color: profitColor(backtestResult.totalReturn) }}>{backtestResult.totalReturn}%</span></span>
                         <span>勝率：<span style={{ color: "#64b5f6" }}>{backtestResult.winRate}%</span></span>
                         <span>最大回撤：<span style={{ color: "#ff7043" }}>-{backtestResult.maxDrawdown}%</span></span>
                       </div>
@@ -941,11 +930,7 @@ export default function App() {
                       ⚠️ 請在上方輸入 Claude API Key 才能使用 AI 分析功能
                     </div>
                   )}
-                  <button onClick={handleClaudeAnalysis} disabled={claudeLoading || !claudeKey || !backtestResult} style={{
-                    background: (claudeKey && backtestResult) ? "linear-gradient(135deg,#6a1b9a,#1565c0)" : "#1e3a4f",
-                    border: "none", borderRadius: 8, color: "#fff", padding: "10px 24px",
-                    fontSize: 13, fontWeight: 700, cursor: (claudeKey && backtestResult) ? "pointer" : "not-allowed", marginBottom: 16,
-                  }}>
+                  <button onClick={handleClaudeAnalysis} disabled={claudeLoading || !claudeKey || !backtestResult} style={{ background: (claudeKey && backtestResult) ? "linear-gradient(135deg,#6a1b9a,#1565c0)" : "#1e3a4f", border: "none", borderRadius: 8, color: "#fff", padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: (claudeKey && backtestResult) ? "pointer" : "not-allowed", marginBottom: 16 }}>
                     {claudeLoading ? "🤖 分析中..." : "🤖 開始 AI 分析"}
                   </button>
                   {claudeAnalysis && (
@@ -989,11 +974,7 @@ export default function App() {
                   {MARKET_STRATEGY.map(({ market, strategies, color }) => (
                     <div key={market} style={{ background: "#0d1b26", borderRadius: 8, padding: "12px 16px", borderLeft: `3px solid ${color}` }}>
                       <div style={{ color, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>📈 {market}</div>
-                      {strategies.map(s => (
-                        <div key={s} style={{ color: "#90caf9", fontSize: 11, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ color, fontSize: 8 }}>●</span>{s}
-                        </div>
-                      ))}
+                      {strategies.map(s => <div key={s} style={{ color: "#90caf9", fontSize: 11, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><span style={{ color, fontSize: 8 }}>●</span>{s}</div>)}
                     </div>
                   ))}
                 </div>
@@ -1007,7 +988,7 @@ export default function App() {
         <div style={{ textAlign: "center", padding: "50px 20px", color: "#546e7a" }}>
           <div style={{ fontSize: 44, marginBottom: 14 }}>📊</div>
           <div style={{ fontSize: 15, marginBottom: 6, color: "#78909c" }}>輸入股票代號和 FinMind Token</div>
-          <div style={{ fontSize: 12 }}>支援上市/上櫃 · 11 種策略 · K線圖滾輪縮放 · Claude AI 分析</div>
+          <div style={{ fontSize: 12 }}>支援上市/上櫃 · 11 種策略 · K線滾輪縮放+拖曳 · Claude AI 分析</div>
         </div>
       )}
     </div>
