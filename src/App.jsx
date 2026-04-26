@@ -496,6 +496,9 @@ export default function App() {
   const [multiResults, setMultiResults] = useState(null);
   const [claudeAnalysis, setClaudeAnalysis] = useState("");
   const [claudeLoading, setClaudeLoading] = useState(false);
+  const [splitResult, setSplitResult] = useState(null);
+  const [optimizeResult, setOptimizeResult] = useState(null);
+  const [benchmarkData, setBenchmarkData] = useState(null);
 
   const handleAnalyze = async () => {
     if (!finmindToken) { setError("請先輸入 FinMind Token 才能開始分析"); return; }
@@ -552,6 +555,67 @@ export default function App() {
         results.push({ code, normalized: data.map(d => ({ date: d.date.slice(5), [code]: +((d.close - first) / first * 100).toFixed(2) })), backtest: runBacktest(data, strategy, strategy === "custom" ? customParams : {}, initialCapital, stopLoss, takeProfit) });
       }
       setMultiResults(results); setActiveTab("multi_stock");
+    } catch(e) { setError(e.message); }
+    setLoading(false); setLoadingMsg("");
+  };
+
+  // 分段回測驗證
+  const handleSplitValidation = () => {
+    if (!stockData) return;
+    const mid = Math.floor(stockData.length / 2);
+    const firstHalf = stockData.slice(0, mid);
+    const secondHalf = stockData.slice(mid);
+    const params = strategy === "custom" ? customParams : {};
+    const r1 = runBacktest(firstHalf, strategy, params, initialCapital, stopLoss, takeProfit);
+    const r2 = runBacktest(secondHalf, strategy, params, initialCapital, stopLoss, takeProfit);
+    const midDate = stockData[mid].date;
+    const consistent = (parseFloat(r1.totalReturn) > 0) === (parseFloat(r2.totalReturn) > 0);
+    setSplitResult({ r1, r2, midDate, consistent, firstStart: stockData[0].date, firstEnd: stockData[mid-1].date, secondStart: midDate, secondEnd: stockData[stockData.length-1].date });
+    setActiveTab("split");
+  };
+
+  // 最佳參數搜尋
+  const handleOptimize = () => {
+    if (!stockData) return;
+    setLoading(true); setLoadingMsg("🔍 搜尋最佳參數中...");
+    setTimeout(() => {
+      try {
+        const params = strategy === "custom" ? customParams : {};
+        const slOptions = [0, 3, 5, 8, 10, 15];
+        const tpOptions = [0, 5, 10, 15, 20, 30];
+        const results = [];
+        for (const sl of slOptions) {
+          for (const tp of tpOptions) {
+            const r = runBacktest(stockData, strategy, params, initialCapital, sl, tp);
+            results.push({ sl, tp, totalReturn: parseFloat(r.totalReturn), winRate: parseFloat(r.winRate), maxDrawdown: parseFloat(r.maxDrawdown), trades: r.sellTrades.length });
+          }
+        }
+        results.sort((a, b) => b.totalReturn - a.totalReturn);
+        setOptimizeResult(results);
+        setActiveTab("optimize");
+      } catch(e) { setError(e.message); }
+      setLoading(false); setLoadingMsg("");
+    }, 100);
+  };
+
+  // 大盤對照（0050）
+  const handleBenchmark = async () => {
+    if (!stockData || !finmindToken) { setError("請先執行回測再對照大盤"); return; }
+    setLoading(true); setLoadingMsg("📡 抓取 0050 大盤資料中...");
+    try {
+      const benchData = await fetchMergedData("0050", startDate, endDate, finmindToken);
+      const stockFirst = stockData[0].close;
+      const benchFirst = benchData[0].close;
+      const merged = stockData.map(d => {
+        const bench = benchData.find(b => b.date === d.date);
+        return {
+          date: d.date.slice(5),
+          [stockCode]: +((d.close - stockFirst) / stockFirst * 100).toFixed(2),
+          "0050": bench ? +((bench.close - benchFirst) / benchFirst * 100).toFixed(2) : null,
+        };
+      }).filter(d => d["0050"] !== null);
+      setBenchmarkData(merged);
+      setActiveTab("benchmark");
     } catch(e) { setError(e.message); }
     setLoading(false); setLoadingMsg("");
   };
@@ -685,6 +749,9 @@ export default function App() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={handleAnalyze} disabled={loading} style={{ background: "linear-gradient(135deg,#1565c0,#0288d1)", border: "none", borderRadius: 8, color: "#fff", padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🔍 開始分析</button>
           <button onClick={handleCompareAll} disabled={loading || !stockData} style={{ background: "#0d2a3a", border: "1px solid #1565c0", borderRadius: 8, color: "#64b5f6", padding: "9px 16px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>📊 比較所有策略</button>
+          <button onClick={handleSplitValidation} disabled={loading || !stockData} style={{ background: "#0d2a3a", border: "1px solid #80cbc4", borderRadius: 8, color: "#80cbc4", padding: "9px 16px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>✂️ 分段驗證</button>
+          <button onClick={handleOptimize} disabled={loading || !stockData} style={{ background: "#0d2a3a", border: "1px solid #ce93d8", borderRadius: 8, color: "#ce93d8", padding: "9px 16px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>🔍 最佳參數</button>
+          <button onClick={handleBenchmark} disabled={loading || !stockData} style={{ background: "#0d2a3a", border: "1px solid #ffd54f", borderRadius: 8, color: "#ffd54f", padding: "9px 16px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>📈 大盤對照</button>
         </div>
       </div>
 
@@ -703,7 +770,7 @@ export default function App() {
       {(chartData.length > 0 || multiResults) && (
         <>
           <div style={{ display: "flex", gap: 3, marginBottom: 14, background: "#0a1520", padding: 5, borderRadius: 8, flexWrap: "wrap" }}>
-            {[["chart","📊 K線圖"],["bollinger","📉 布林"],["indicators","📈 RSI/KD"],["macd","〰 MACD"],["equity","💰 資金"],["trades","📋 交易"],["multi_stock","🔄 多股"],["compare_all","🏆 策略比較"],["ai_analysis","🤖 AI分析"],["guide","📖 說明"]].map(([t,l]) => (
+            {[["chart","📊 K線圖"],["bollinger","📉 布林"],["indicators","📈 RSI/KD"],["macd","〰 MACD"],["equity","💰 資金"],["trades","📋 交易"],["multi_stock","🔄 多股"],["compare_all","🏆 策略比較"],["split","✂️ 分段驗證"],["optimize","🔍 最佳參數"],["benchmark","📈 大盤對照"],["ai_analysis","🤖 AI分析"],["guide","📖 說明"]].map(([t,l]) => (
               <button key={t} style={tabBtn(t)} onClick={() => setActiveTab(t)}>{l}</button>
             ))}
           </div>
@@ -901,8 +968,137 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === "ai_analysis" && (
-            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
+          {/* 分段驗證 */}
+          {activeTab === "split" && splitResult && (
+            <div style={{ display: "grid", gap: 14 }}>
+              <div style={{ background: "#0a1520", border: `1px solid ${splitResult.consistent ? "#4caf50" : "#ef5350"}`, borderRadius: 12, padding: 18 }}>
+                <h3 style={{ margin: "0 0 12px", color: "#90caf9", fontSize: 13 }}>✂️ 分段回測驗證 — {STRATEGIES[strategy]?.name}</h3>
+                <div style={{ background: splitResult.consistent ? "#0d2a1a" : "#2a0d0d", borderRadius: 8, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 24 }}>{splitResult.consistent ? "✅" : "⚠️"}</span>
+                  <div>
+                    <div style={{ color: splitResult.consistent ? "#4caf50" : "#ef5350", fontWeight: 700, fontSize: 14 }}>
+                      {splitResult.consistent ? "策略一致性良好！兩段期間皆獲利" : "策略一致性不足！兩段期間結果不一致"}
+                    </div>
+                    <div style={{ color: "#546e7a", fontSize: 11, marginTop: 3 }}>
+                      {splitResult.consistent ? "前後兩段回測結果方向相同，策略具有較高可信度" : "前後兩段結果差異大，可能存在過度優化風險，建議謹慎使用"}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                  {[
+                    { label: "前半段（訓練期）", r: splitResult.r1, start: splitResult.firstStart, end: splitResult.firstEnd, color: "#64b5f6" },
+                    { label: "後半段（驗證期）", r: splitResult.r2, start: splitResult.secondStart, end: splitResult.secondEnd, color: "#ffd54f" },
+                  ].map(({ label, r, start, end, color }) => (
+                    <div key={label} style={{ background: "#0d1b26", borderRadius: 8, padding: 16, border: `1px solid ${color}33` }}>
+                      <div style={{ color, fontWeight: 700, fontSize: 12, marginBottom: 10 }}>{label}</div>
+                      <div style={{ color: "#546e7a", fontSize: 10, marginBottom: 12 }}>{start} ～ {end}</div>
+                      {[
+                        ["總報酬率", `${r.totalReturn}%`, parseFloat(r.totalReturn) >= 0 ? "#ef5350" : "#4caf50"],
+                        ["勝率", `${r.winRate}%`, "#64b5f6"],
+                        ["最大回撤", `-${r.maxDrawdown}%`, "#ff7043"],
+                        ["交易次數", r.sellTrades.length, "#ce93d8"],
+                      ].map(([k, v, c]) => (
+                        <div key={k} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}>
+                          <span style={{ color: "#546e7a" }}>{k}</span>
+                          <span style={{ color: c, fontWeight: 700, fontFamily: "monospace" }}>{v}</span>
+                        </div>
+                      ))}
+                      <div style={{ marginTop: 8, padding: "6px 10px", background: "#060e17", borderRadius: 6, fontSize: 11, color: "#546e7a" }}>
+                        樣本數：{r.sellTrades.length >= 10 ? "✅ 足夠（≥10次）" : `⚠️ 不足（僅${r.sellTrades.length}次）`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 最佳參數搜尋 */}
+          {activeTab === "optimize" && optimizeResult && (
+            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
+              <h3 style={{ margin: "0 0 8px", color: "#90caf9", fontSize: 13 }}>🔍 停損停利最佳參數搜尋 — {STRATEGIES[strategy]?.name}</h3>
+              <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 16 }}>自動測試 36 種停損停利組合，依總報酬率排名</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #1e3a4f" }}>
+                      {["排名","停損%","停利%","總報酬率","勝率","最大回撤","交易次數"].map(h => (
+                        <th key={h} style={{ padding: "8px 12px", color: "#546e7a", textAlign: "left", fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {optimizeResult.slice(0, 15).map((r, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #0d2a3a", background: i === 0 ? "#0d2a1a" : i < 3 ? "#0d1f2a" : "transparent" }}>
+                        <td style={{ padding: "8px 12px", color: i === 0 ? "#ffd54f" : "#546e7a", fontWeight: i === 0 ? 700 : 400 }}>
+                          {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i+1}`}
+                        </td>
+                        <td style={{ padding: "8px 12px", color: r.sl === 0 ? "#546e7a" : "#ef5350", fontFamily: "monospace" }}>{r.sl === 0 ? "不設定" : `${r.sl}%`}</td>
+                        <td style={{ padding: "8px 12px", color: r.tp === 0 ? "#546e7a" : "#4caf50", fontFamily: "monospace" }}>{r.tp === 0 ? "不設定" : `${r.tp}%`}</td>
+                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: r.totalReturn >= 0 ? "#ef5350" : "#4caf50", fontWeight: i < 3 ? 700 : 400 }}>{r.totalReturn >= 0 ? "+" : ""}{r.totalReturn}%</td>
+                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#64b5f6" }}>{r.winRate}%</td>
+                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#ff7043" }}>-{r.maxDrawdown}%</td>
+                        <td style={{ padding: "8px 12px", fontFamily: "monospace", color: "#ce93d8" }}>{r.trades}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {optimizeResult[0] && (
+                <div style={{ marginTop: 14, background: "#0d2a1a", borderRadius: 8, padding: "12px 16px", border: "1px solid #4caf5033" }}>
+                  <div style={{ color: "#4caf50", fontWeight: 700, fontSize: 12, marginBottom: 6 }}>💡 最佳參數建議</div>
+                  <div style={{ color: "#e0f0ff", fontSize: 13 }}>
+                    停損：<span style={{ color: "#ef5350", fontWeight: 700 }}>{optimizeResult[0].sl === 0 ? "不設定" : `${optimizeResult[0].sl}%`}</span>　
+                    停利：<span style={{ color: "#4caf50", fontWeight: 700 }}>{optimizeResult[0].tp === 0 ? "不設定" : `${optimizeResult[0].tp}%`}</span>　
+                    預期報酬：<span style={{ color: "#ef5350", fontWeight: 700 }}>+{optimizeResult[0].totalReturn}%</span>
+                  </div>
+                  <div style={{ color: "#546e7a", fontSize: 11, marginTop: 6 }}>⚠️ 最佳參數基於歷史資料，未來不保證相同效果，建議搭配分段驗證確認</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 大盤對照 */}
+          {activeTab === "benchmark" && benchmarkData && (
+            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
+              <h3 style={{ margin: "0 0 8px", color: "#90caf9", fontSize: 13 }}>📈 大盤對照 — {stockCode} vs 0050（元大台灣50）</h3>
+              <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 16 }}>以各自起始日為基準，比較持股報酬率</div>
+              {(() => {
+                const lastStock = benchmarkData[benchmarkData.length - 1]?.[stockCode] || 0;
+                const lastBench = benchmarkData[benchmarkData.length - 1]?.["0050"] || 0;
+                const beat = lastStock > lastBench;
+                return (
+                  <div style={{ background: beat ? "#0d2a1a" : "#2a0d0d", borderRadius: 8, padding: "10px 16px", marginBottom: 14, display: "flex", gap: 24, flexWrap: "wrap" }}>
+                    <div>
+                      <span style={{ color: "#546e7a", fontSize: 11 }}>{stockCode} 累積報酬：</span>
+                      <span style={{ color: "#ef5350", fontWeight: 700, fontSize: 16, marginLeft: 8 }}>{lastStock >= 0 ? "+" : ""}{lastStock.toFixed(2)}%</span>
+                    </div>
+                    <div>
+                      <span style={{ color: "#546e7a", fontSize: 11 }}>0050 累積報酬：</span>
+                      <span style={{ color: "#ffd54f", fontWeight: 700, fontSize: 16, marginLeft: 8 }}>{lastBench >= 0 ? "+" : ""}{lastBench.toFixed(2)}%</span>
+                    </div>
+                    <div style={{ color: beat ? "#4caf50" : "#ef9a9a", fontWeight: 700 }}>
+                      {beat ? `✅ 跑贏大盤 +${(lastStock - lastBench).toFixed(2)}%` : `❌ 跑輸大盤 ${(lastStock - lastBench).toFixed(2)}%`}
+                    </div>
+                  </div>
+                );
+              })()}
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={benchmarkData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#0d2a3a" />
+                  <XAxis dataKey="date" tick={{ fill: "#546e7a", fontSize: 10 }} interval={Math.floor(benchmarkData.length/8)} />
+                  <YAxis tick={{ fill: "#546e7a", fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <ReferenceLine y={0} stroke="#546e7a" strokeDasharray="4 2" />
+                  <Line type="monotone" dataKey={stockCode} stroke="#ef5350" dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="0050" stroke="#ffd54f" dot={false} strokeWidth={2} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {activeTab === "ai_analysis" && (            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
               <h3 style={{ margin: "0 0 16px", color: "#90caf9", fontSize: 13 }}>🤖 Claude AI 回測分析</h3>
               {!stockData ? (
                 <div style={{ color: "#546e7a", fontSize: 13, textAlign: "center", padding: 40 }}>請先點「開始分析」執行回測，再進行 AI 分析</div>
