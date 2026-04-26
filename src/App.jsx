@@ -4,22 +4,20 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
-// ─── 策略定義 ──────────────────────────────────────────────
 const STRATEGIES = {
-  ma_cross:       { name: "MA 黃金交叉",      tag: "趨勢",   color: "#64b5f6", desc: "MA5 上穿 MA20 買進，下穿賣出。適合趨勢明確的市場。" },
-  ma_triple:      { name: "三線多頭排列",      tag: "趨勢",   color: "#4fc3f7", desc: "MA5>MA20>MA60 全部多頭排列才買進。適合強勢趨勢股。" },
-  rsi_oversold:   { name: "RSI 超賣反彈",      tag: "反轉",   color: "#ce93d8", desc: "RSI<30 買進，RSI>70 賣出。適合震盪橫盤市場。" },
-  kd_cross:       { name: "KD 黃金交叉",       tag: "反轉",   color: "#f48fb1", desc: "低檔 KD 黃金交叉買進，高檔死亡交叉賣出。" },
-  macd_cross:     { name: "MACD 黃金交叉",     tag: "趨勢",   color: "#80cbc4", desc: "MACD 線上穿訊號線買進，適合中長線趨勢操作。" },
-  bollinger:      { name: "布林通道突破",       tag: "突破",   color: "#ffcc80", desc: "價格突破上軌買進，跌破下軌賣出。適合波動大的股票。" },
-  bollinger_revert: { name: "布林通道反轉",    tag: "反轉",   color: "#ffb74d", desc: "價格觸碰下軌反彈買進，觸碰上軌賣出。適合橫盤整理。" },
-  volume_breakout:  { name: "量增突破",         tag: "突破",   color: "#a5d6a7", desc: "量增超過5日均量2倍且價格創新高買進。適合主力介入初期。" },
-  turtle:         { name: "海龜突破策略",       tag: "突破",   color: "#ef9a9a", desc: "突破20日高點買進，跌破10日低點賣出。經典趨勢追蹤系統。" },
-  rsi_ma:         { name: "RSI + MA 組合",     tag: "組合",   color: "#b39ddb", desc: "RSI 在 40~65 健康區間且股價在 MA20 上方才買進。" },
-  custom:         { name: "自訂策略",           tag: "自訂",   color: "#90caf9", desc: "自行勾選多個指標組合條件。" },
+  ma_cross:         { name: "MA 黃金交叉",      tag: "趨勢", color: "#64b5f6", desc: "MA5 上穿 MA20 買進，下穿賣出。適合趨勢明確的市場。" },
+  ma_triple:        { name: "三線多頭排列",      tag: "趨勢", color: "#4fc3f7", desc: "MA5>MA20>MA60 全部多頭排列才買進。適合強勢趨勢股。" },
+  rsi_oversold:     { name: "RSI 超賣反彈",      tag: "反轉", color: "#ce93d8", desc: "RSI<30 買進，RSI>70 賣出。適合震盪橫盤市場。" },
+  kd_cross:         { name: "KD 黃金交叉",       tag: "反轉", color: "#f48fb1", desc: "低檔 KD 黃金交叉買進，高檔死亡交叉賣出。" },
+  macd_cross:       { name: "MACD 黃金交叉",     tag: "趨勢", color: "#80cbc4", desc: "MACD 線上穿訊號線買進，適合中長線趨勢操作。" },
+  bollinger:        { name: "布林通道突破",       tag: "突破", color: "#ffcc80", desc: "價格突破上軌買進，跌破下軌賣出。適合波動大的股票。" },
+  bollinger_revert: { name: "布林通道反轉",       tag: "反轉", color: "#ffb74d", desc: "價格觸碰下軌反彈買進，觸碰上軌賣出。適合橫盤整理。" },
+  volume_breakout:  { name: "量增突破",           tag: "突破", color: "#a5d6a7", desc: "量增超過5日均量2倍且價格創新高買進。適合主力介入初期。" },
+  turtle:           { name: "海龜突破策略",       tag: "突破", color: "#ef9a9a", desc: "突破20日高點買進，跌破10日低點賣出。經典趨勢追蹤系統。" },
+  rsi_ma:           { name: "RSI + MA 組合",     tag: "組合", color: "#b39ddb", desc: "RSI 在 40~65 健康區間且股價在 MA20 上方才買進。" },
+  custom:           { name: "自訂策略",           tag: "自訂", color: "#90caf9", desc: "自行勾選多個指標組合條件。" },
 };
 
-// ─── 技術指標計算 ──────────────────────────────────────────
 function calcMA(data, period) {
   return data.map((_, i) => {
     if (i < period - 1) return null;
@@ -41,8 +39,7 @@ function calcMACD(data) {
   const ema12 = calcEMA(data, 12);
   const ema26 = calcEMA(data, 26);
   const macdLine = ema12.map((v, i) => v - ema26[i]);
-  const signalData = macdLine.map((v, i) => ({ close: v }));
-  const signal = calcEMA(signalData, 9);
+  const signal = calcEMA(macdLine.map(v => ({ close: v })), 9);
   const histogram = macdLine.map((v, i) => v - signal[i]);
   return { macdLine, signal, histogram };
 }
@@ -98,7 +95,6 @@ function calcMaxDrawdown(equity, initial) {
   return maxDD.toFixed(2);
 }
 
-// ─── 回測引擎 ─────────────────────────────────────────────
 function runBacktest(data, strategy, params, initialCapital = 1000000) {
   const ma5  = calcMA(data, 5);
   const ma20 = calcMA(data, 20);
@@ -109,8 +105,6 @@ function runBacktest(data, strategy, params, initialCapital = 1000000) {
   const boll = calcBollinger(data, 20, 2);
   const volumes = data.map(d => d.volume);
   const avgVol5 = calcMA(data.map(v => ({ close: v.volume })), 5);
-
-  // 計算 N 日高低點
   const high20 = data.map((_, i) => i < 20 ? null : Math.max(...data.slice(i - 20, i).map(d => d.high)));
   const low10  = data.map((_, i) => i < 10 ? null : Math.min(...data.slice(i - 10, i).map(d => d.low)));
 
@@ -160,11 +154,11 @@ function runBacktest(data, strategy, params, initialCapital = 1000000) {
       }
     } else if (strategy === "volume_breakout") {
       const vol = volumes[i];
-      const avgV = avgVol5[i] ? avgVol5[i].close || avgVol5[i] : null;
+      const avgV = avgVol5[i];
       const prevHigh = i > 1 ? Math.max(...data.slice(Math.max(0, i-5), i).map(d => d.high)) : null;
       if (avgV && prevHigh && ma20[i]) {
         buySignal = vol > avgV * 2 && price > prevHigh && price > ma20[i];
-        sellSignal = inPosition && (price < ma20[i] || rsi[i] > 75);
+        sellSignal = inPosition && (price < ma20[i] || (rsi[i] !== null && rsi[i] > 75));
       }
     } else if (strategy === "turtle") {
       if (high20[i] && low10[i]) {
@@ -223,19 +217,42 @@ function runBacktest(data, strategy, params, initialCapital = 1000000) {
   };
 }
 
-// 新版 fetchMergedData 函數
-// 替換 App.jsx 裡的 fetchMergedData 函數即可
+async function fetchYahoo(code, suffix, startTs, endTs, tStart, endDate) {
+  try {
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
+    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`;
+    const res = await fetch(proxyUrl);
+    if (!res.ok) return [];
+    const json = await res.json();
+    const result = json?.chart?.result?.[0];
+    if (!result?.timestamp) return [];
+    const { timestamp, indicators } = result;
+    const quote = indicators.quote[0];
+    return timestamp.map((ts, i) => {
+      const date = new Date(ts * 1000);
+      const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+      return {
+        date: iso,
+        open: quote.open[i] ? +quote.open[i].toFixed(2) : null,
+        high: quote.high[i] ? +quote.high[i].toFixed(2) : null,
+        low: quote.low[i] ? +quote.low[i].toFixed(2) : null,
+        close: quote.close[i] ? +quote.close[i].toFixed(2) : null,
+        volume: quote.volume[i] || 0,
+      };
+    }).filter(d => d.close !== null && d.date >= tStart && d.date <= endDate);
+  } catch(e) {
+    return [];
+  }
+}
 
 async function fetchMergedData(code, startDate, endDate, token) {
   const CUTOFF = "2025-04-01";
   let finmindData = [], recentData = [];
 
-  // 步驟一：用 FinMind 抓歷史資料（到 2025/3）
+  // 1. FinMind 抓歷史資料
   if (startDate < CUTOFF) {
     const fEnd = endDate < CUTOFF ? endDate : CUTOFF;
-    const res = await fetch(
-      `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${startDate}&end_date=${fEnd}&token=${token}`
-    );
+    const res = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${startDate}&end_date=${fEnd}&token=${token}`);
     const json = await res.json();
     if (json.data?.length) {
       finmindData = json.data.map(d => ({
@@ -249,75 +266,30 @@ async function fetchMergedData(code, startDate, endDate, token) {
     }
   }
 
-  // 步驟二：用 Yahoo Finance 抓近期資料（2025/4 以後）
-  // Yahoo Finance 支援上市(.TW)和上櫃(.TWO)，自動判斷
+  // 2. Yahoo Finance 抓近期資料（自動判斷上市/上櫃）
   if (endDate >= CUTOFF) {
     const tStart = startDate > CUTOFF ? startDate : CUTOFF;
     const startTs = Math.floor(new Date(tStart).getTime() / 1000);
     const endTs = Math.floor(new Date(endDate).getTime() / 1000) + 86400;
 
-    // 先試上市股(.TW)
-    let yahooData = [];
-    let tried = false;
-
-    const tryFetch = async (suffix) => {
-      try {
-        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
-        const res = await fetch(`https://corsproxy.io/?${yahooUrl}`);
-        const json = await res.json();
-        const result = json?.chart?.result?.[0];
-        if (!result || !result.timestamp) return [];
-
-        const { timestamp, indicators } = result;
-        const quote = indicators.quote[0];
-        return timestamp.map((ts, i) => {
-          const date = new Date(ts * 1000);
-          const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
-          return {
-            date: iso,
-            open: quote.open[i] ? parseFloat(quote.open[i].toFixed(2)) : null,
-            high: quote.high[i] ? parseFloat(quote.high[i].toFixed(2)) : null,
-            low: quote.low[i] ? parseFloat(quote.low[i].toFixed(2)) : null,
-            close: quote.close[i] ? parseFloat(quote.close[i].toFixed(2)) : null,
-            volume: quote.volume[i] || 0,
-          };
-        }).filter(d => d.close !== null && d.date >= tStart && d.date <= endDate);
-      } catch(e) {
-        return [];
-      }
-    };
-
-    // 先試上市(.TW)，沒資料再試上櫃(.TWO)
-    yahooData = await tryFetch(".TW");
-    if (yahooData.length === 0) {
-      yahooData = await tryFetch(".TWO");
+    // 先試上市 .TW，再試上櫃 .TWO
+    recentData = await fetchYahoo(code, ".TW", startTs, endTs, tStart, endDate);
+    if (recentData.length === 0) {
+      recentData = await fetchYahoo(code, ".TWO", startTs, endTs, tStart, endDate);
     }
-
-    recentData = yahooData;
   }
 
-  // 步驟三：合併並去重排序
-  const allData = [...finmindData, ...recentData];
+  // 3. 合併去重排序
   const seen = new Set();
-  const merged = allData
-    .filter(d => {
-      if (!d.date || seen.has(d.date)) return false;
-      seen.add(d.date);
-      return true;
-    })
+  const merged = [...finmindData, ...recentData]
+    .filter(d => { if (!d.date || seen.has(d.date)) return false; seen.add(d.date); return true; })
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  if (merged.length === 0) {
-    throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確（上市/上櫃皆支援）`);
-  }
-  if (merged.length < 25) {
-    throw new Error(`資料筆數不足（${merged.length} 筆），請延長時間區間至少 25 個交易日`);
-  }
-
+  if (merged.length === 0) throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確（上市/上櫃皆支援）`);
+  if (merged.length < 25) throw new Error(`資料筆數不足（${merged.length} 筆），請延長時間區間至少 25 個交易日`);
   return merged;
 }
 
-// ─── UI 元件 ──────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -347,7 +319,6 @@ const ErrorModal = ({ message, onClose }) => {
   );
 };
 
-// ─── 主元件 ───────────────────────────────────────────────
 export default function App() {
   const [stockCode, setStockCode] = useState("2330");
   const [startDate, setStartDate] = useState("2024-01-01");
@@ -360,7 +331,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [stockData, setStockData] = useState(null);
   const [chartData, setChartData] = useState([]);
-  const [indicatorData, setIndicatorData] = useState([]);
   const [backtestResult, setBacktestResult] = useState(null);
   const [activeTab, setActiveTab] = useState("chart");
   const [customParams, setCustomParams] = useState({ useMA: true, useRSI: true, useKD: false, useMACD: false, useVol: false });
@@ -377,7 +347,6 @@ export default function App() {
       setLoadingMsg("📡 抓取股價資料中...");
       const data = await fetchMergedData(stockCode, startDate, endDate, finmindToken);
       setLoadingMsg("📊 計算技術指標中...");
-
       const ma5  = calcMA(data, 5);
       const ma20 = calcMA(data, 20);
       const ma60 = calcMA(data, 60);
@@ -385,7 +354,6 @@ export default function App() {
       const { k, d } = calcKD(data);
       const { macdLine, signal, histogram } = calcMACD(data);
       const boll = calcBollinger(data, 20, 2);
-
       const chart = data.map((d, i) => ({
         date: d.date.slice(5),
         close: d.close, open: d.open, high: d.high, low: d.low, volume: d.volume,
@@ -402,37 +370,31 @@ export default function App() {
         bollMid: boll[i].mid ? +boll[i].mid.toFixed(2) : null,
         bollLower: boll[i].lower ? +boll[i].lower.toFixed(2) : null,
       }));
-
       setStockData(data); setChartData(chart);
       setLoadingMsg("🔬 執行回測中...");
       const params = strategy === "custom" ? customParams : {};
-      const result = runBacktest(data, strategy, params, initialCapital);
-      setBacktestResult(result);
+      setBacktestResult(runBacktest(data, strategy, params, initialCapital));
       setActiveTab("chart");
     } catch(e) { setError(e.message); }
     setLoading(false); setLoadingMsg("");
   };
 
   const handleCompareAll = async () => {
-    if (!stockData || !finmindToken) return;
-    setLoading(true);
-    setLoadingMsg("🔬 比較所有策略中...");
+    if (!stockData) return;
+    setLoading(true); setLoadingMsg("🔬 比較所有策略中...");
     try {
       const results = {};
       for (const [key] of Object.entries(STRATEGIES)) {
-        const params = key === "custom" ? customParams : {};
-        results[key] = runBacktest(stockData, key, params, initialCapital);
+        results[key] = runBacktest(stockData, key, key === "custom" ? customParams : {}, initialCapital);
       }
-      setAllResults(results);
-      setActiveTab("compare_all");
+      setAllResults(results); setActiveTab("compare_all");
     } catch(e) { setError(e.message); }
     setLoading(false); setLoadingMsg("");
   };
 
   const handleCompare = async () => {
     if (!compareCode || !finmindToken) { setError("請輸入比較股票代號和 FinMind Token"); return; }
-    setLoading(true);
-    setLoadingMsg(`📡 抓取 ${compareCode} 資料中...`);
+    setLoading(true); setLoadingMsg(`📡 抓取 ${compareCode} 資料中...`);
     try {
       const data = await fetchMergedData(compareCode, startDate, endDate, finmindToken);
       const first = data[0].close;
@@ -445,8 +407,8 @@ export default function App() {
   const mergedComp = mainNorm.map((m, i) => ({ ...m, ...(compareData?.normalized[i] || {}) }));
 
   const inp = { background: "#0d1b26", border: "1px solid #1e3a4f", borderRadius: 6, color: "#e0f0ff", padding: "8px 12px", fontSize: 13, width: "100%", outline: "none" };
-  const tab = (t) => ({ padding: "7px 16px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: activeTab === t ? "#1565c0" : "transparent", color: activeTab === t ? "#fff" : "#78909c", transition: "all 0.2s", whiteSpace: "nowrap" });
-  const box = (label, value, color = "#64b5f6", sub = "") => (
+  const tabBtn = (t) => ({ padding: "7px 16px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: activeTab === t ? "#1565c0" : "transparent", color: activeTab === t ? "#fff" : "#78909c", transition: "all 0.2s", whiteSpace: "nowrap" });
+  const statBox = (label, value, color = "#64b5f6", sub = "") => (
     <div style={{ background: "#0d1b26", borderRadius: 10, padding: "14px 18px", border: "1px solid #1e3a4f", flex: 1, minWidth: 110 }}>
       <div style={{ color: "#546e7a", fontSize: 10, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
       <div style={{ color, fontSize: 20, fontWeight: 700, fontFamily: "monospace" }}>{value}</div>
@@ -465,19 +427,18 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <div style={{ width: 8, height: 32, background: "linear-gradient(180deg,#1565c0,#0288d1)", borderRadius: 4 }} />
         <div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: 1 }}>台股回測分析平台</h1>
-          <p style={{ margin: 0, color: "#546e7a", fontSize: 11 }}>Taiwan Stock Backtest · FinMind + TWSE 雙資料源 · 11 種策略</p>
+          <p style={{ margin: 0, color: "#546e7a", fontSize: 11 }}>Taiwan Stock Backtest · FinMind + Yahoo Finance 雙資料源 · 上市/上櫃皆支援 · 11 種策略</p>
         </div>
       </div>
 
-      {/* 控制面板 */}
       <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18, marginBottom: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
-          {[["股票代號", <input style={inp} value={stockCode} onChange={e => setStockCode(e.target.value)} placeholder="e.g. 2330" />],
+          {[
+            ["股票代號", <input style={inp} value={stockCode} onChange={e => setStockCode(e.target.value)} placeholder="上市/上櫃皆可" />],
             ["開始日期", <input style={inp} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />],
             ["結束日期", <input style={inp} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />],
             ["初始資金", <input style={inp} type="number" value={initialCapital} onChange={e => setInitialCapital(Number(e.target.value))} />],
@@ -490,7 +451,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* 策略選擇 */}
         <div style={{ marginBottom: 12 }}>
           <label style={{ color: "#546e7a", fontSize: 10, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>回測策略</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -507,7 +467,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          {strategy && STRATEGIES[strategy] && (
+          {STRATEGIES[strategy] && (
             <div style={{ color: "#546e7a", fontSize: 11, marginTop: 8, padding: "6px 10px", background: "#0d1b26", borderRadius: 6, borderLeft: `3px solid ${STRATEGIES[strategy].color}` }}>
               💡 {STRATEGIES[strategy].desc}
             </div>
@@ -527,8 +487,9 @@ export default function App() {
 
         <div style={{ background: "#0d1b26", borderRadius: 8, padding: "6px 12px", marginBottom: 10, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ color: "#546e7a", fontSize: 10 }}>📡 資料來源：</span>
-          <span style={{ color: "#4caf50", fontSize: 10 }}>● FinMind 歷史（～2025/3）</span>
-          <span style={{ color: "#64b5f6", fontSize: 10 }}>● TWSE 近期（2025/4～今日）</span>
+          <span style={{ color: "#4caf50", fontSize: 10 }}>● FinMind（歷史：2010～2025/3）</span>
+          <span style={{ color: "#64b5f6", fontSize: 10 }}>● Yahoo Finance（近期：2025/4～今日）</span>
+          <span style={{ color: "#ffd54f", fontSize: 10 }}>● 上市/上櫃自動判斷</span>
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -545,28 +506,25 @@ export default function App() {
         </div>
       </div>
 
-      {/* 統計數字 */}
       {backtestResult && (
         <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          {box("總報酬率", `${backtestResult.totalReturn}%`, parseFloat(backtestResult.totalReturn) >= 0 ? "#4caf50" : "#ef5350")}
-          {box("勝率", `${backtestResult.winRate}%`, "#64b5f6", `${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗`)}
-          {box("最大回撤", `-${backtestResult.maxDrawdown}%`, "#ff7043")}
-          {box("最終資金", `${(backtestResult.finalCapital/10000).toFixed(0)}萬`, "#4caf50", `初始${(initialCapital/10000).toFixed(0)}萬`)}
-          {box("交易次數", backtestResult.sellTrades.length, "#ce93d8", "已完成")}
-          {chartData.length > 0 && box("資料筆數", chartData.length, "#546e7a", `${chartData[0]?.date}~${chartData[chartData.length-1]?.date}`)}
+          {statBox("總報酬率", `${backtestResult.totalReturn}%`, parseFloat(backtestResult.totalReturn) >= 0 ? "#4caf50" : "#ef5350")}
+          {statBox("勝率", `${backtestResult.winRate}%`, "#64b5f6", `${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗`)}
+          {statBox("最大回撤", `-${backtestResult.maxDrawdown}%`, "#ff7043")}
+          {statBox("最終資金", `${(backtestResult.finalCapital/10000).toFixed(0)}萬`, "#4caf50", `初始${(initialCapital/10000).toFixed(0)}萬`)}
+          {statBox("交易次數", backtestResult.sellTrades.length, "#ce93d8", "已完成")}
+          {chartData.length > 0 && statBox("資料筆數", chartData.length, "#546e7a", `${chartData[0]?.date}~${chartData[chartData.length-1]?.date}`)}
         </div>
       )}
 
-      {/* 分頁 */}
       {chartData.length > 0 && (
         <>
           <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "#0a1520", padding: 5, borderRadius: 8, width: "fit-content", flexWrap: "wrap" }}>
             {[["chart","📊 K線圖"],["bollinger","📉 布林通道"],["indicators","📈 RSI/KD"],["macd","〰 MACD"],["equity","💰 資金曲線"],["trades","📋 交易記錄"],["stock_compare","🔄 股票比較"],["compare_all","🏆 策略比較"]].map(([t,l]) => (
-              <button key={t} style={tab(t)} onClick={() => setActiveTab(t)}>{l}</button>
+              <button key={t} style={tabBtn(t)} onClick={() => setActiveTab(t)}>{l}</button>
             ))}
           </div>
 
-          {/* K線圖 */}
           {activeTab === "chart" && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
               <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>{stockCode} 股價 + MA均線 {backtestResult && <span style={{ color: "#546e7a", fontSize: 11 }}>｜綠線=買進 紅線=賣出</span>}</h3>
@@ -601,7 +559,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 布林通道 */}
           {activeTab === "bollinger" && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
               <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>布林通道 (20, 2σ)</h3>
@@ -621,20 +578,19 @@ export default function App() {
             </div>
           )}
 
-          {/* RSI / KD */}
           {activeTab === "indicators" && (
             <div style={{ display: "grid", gap: 14 }}>
               {[
-                { title: "RSI (14)", keys: [{ k: "rsi", c: "#ce93d8", n: "RSI" }], refs: [70, 30], domain: [0, 100] },
-                { title: "KD (9)", keys: [{ k: "k", c: "#ffd54f", n: "K值" }, { k: "d", c: "#ef9a9a", n: "D值" }], refs: [80, 20], domain: [0, 100] },
-              ].map(({ title, keys, refs, domain }) => (
+                { title: "RSI (14)", keys: [{ k: "rsi", c: "#ce93d8", n: "RSI" }], refs: [70, 30] },
+                { title: "KD (9)", keys: [{ k: "k", c: "#ffd54f", n: "K值" }, { k: "d", c: "#ef9a9a", n: "D值" }], refs: [80, 20] },
+              ].map(({ title, keys, refs }) => (
                 <div key={title} style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
                   <h3 style={{ margin: "0 0 10px", color: "#90caf9", fontSize: 13 }}>{title}</h3>
                   <ResponsiveContainer width="100%" height={160}>
                     <ComposedChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#0d2a3a" />
                       <XAxis dataKey="date" tick={{ fill: "#546e7a", fontSize: 10 }} interval={Math.floor(chartData.length/8)} />
-                      <YAxis domain={domain} tick={{ fill: "#546e7a", fontSize: 10 }} />
+                      <YAxis domain={[0, 100]} tick={{ fill: "#546e7a", fontSize: 10 }} />
                       <Tooltip content={<CustomTooltip />} />
                       {refs.map(r => <ReferenceLine key={r} y={r} stroke={r > 50 ? "#ef5350" : "#4caf50"} strokeDasharray="4 2" />)}
                       {keys.map(({ k, c, n }) => <Line key={k} type="monotone" dataKey={k} stroke={c} dot={false} strokeWidth={1.5} name={n} />)}
@@ -645,29 +601,25 @@ export default function App() {
             </div>
           )}
 
-          {/* MACD */}
           {activeTab === "macd" && (
-            <div style={{ display: "grid", gap: 14 }}>
-              <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
-                <h3 style={{ margin: "0 0 10px", color: "#90caf9", fontSize: 13 }}>MACD (12, 26, 9)</h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <ComposedChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#0d2a3a" />
-                    <XAxis dataKey="date" tick={{ fill: "#546e7a", fontSize: 10 }} interval={Math.floor(chartData.length/8)} />
-                    <YAxis tick={{ fill: "#546e7a", fontSize: 10 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <ReferenceLine y={0} stroke="#546e7a" strokeDasharray="4 2" />
-                    <Bar dataKey="histogram" fill="#64b5f6" opacity={0.6} name="柱狀" />
-                    <Line type="monotone" dataKey="macd" stroke="#ffd54f" dot={false} strokeWidth={1.5} name="MACD線" />
-                    <Line type="monotone" dataKey="signal" stroke="#ef9a9a" dot={false} strokeWidth={1.5} name="訊號線" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
+            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
+              <h3 style={{ margin: "0 0 10px", color: "#90caf9", fontSize: 13 }}>MACD (12, 26, 9)</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <ComposedChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#0d2a3a" />
+                  <XAxis dataKey="date" tick={{ fill: "#546e7a", fontSize: 10 }} interval={Math.floor(chartData.length/8)} />
+                  <YAxis tick={{ fill: "#546e7a", fontSize: 10 }} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <ReferenceLine y={0} stroke="#546e7a" strokeDasharray="4 2" />
+                  <Bar dataKey="histogram" fill="#64b5f6" opacity={0.6} name="柱狀" />
+                  <Line type="monotone" dataKey="macd" stroke="#ffd54f" dot={false} strokeWidth={1.5} name="MACD線" />
+                  <Line type="monotone" dataKey="signal" stroke="#ef9a9a" dot={false} strokeWidth={1.5} name="訊號線" />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
           )}
 
-          {/* 資金曲線 */}
           {activeTab === "equity" && backtestResult && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 10px", color: "#90caf9", fontSize: 13 }}>資金曲線</h3>
@@ -684,7 +636,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 交易記錄 */}
           {activeTab === "trades" && backtestResult && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>交易記錄（{backtestResult.trades.length} 筆）</h3>
@@ -693,7 +644,7 @@ export default function App() {
                   <thead>
                     <tr style={{ borderBottom: "1px solid #1e3a4f" }}>
                       {["類型","日期","價格","股數","損益","損益%"].map(h => (
-                        <th key={h} style={{ padding: "7px 14px", color: "#546e7a", textAlign: "left", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                        <th key={h} style={{ padding: "7px 14px", color: "#546e7a", textAlign: "left", fontSize: 10, textTransform: "uppercase" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -718,7 +669,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 股票比較 */}
           {activeTab === "stock_compare" && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 12px", color: "#90caf9", fontSize: 13 }}>股票漲幅比較（基準化）</h3>
@@ -741,7 +691,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 策略比較 */}
           {activeTab === "compare_all" && allResults && (
             <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
               <h3 style={{ margin: "0 0 16px", color: "#90caf9", fontSize: 13 }}>🏆 所有策略回測比較 — {stockCode}</h3>
@@ -771,7 +720,7 @@ export default function App() {
                           <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#64b5f6" }}>{r.winRate}%</td>
                           <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#ff7043" }}>-{r.maxDrawdown}%</td>
                           <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#ce93d8" }}>{r.sellTrades.length}</td>
-                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: parseFloat(r.finalCapital) >= initialCapital ? "#4caf50" : "#ef5350" }}>
+                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: r.finalCapital >= initialCapital ? "#4caf50" : "#ef5350" }}>
                             {(r.finalCapital/10000).toFixed(0)}萬
                           </td>
                         </tr>
@@ -788,7 +737,7 @@ export default function App() {
         <div style={{ textAlign: "center", padding: "50px 20px", color: "#546e7a" }}>
           <div style={{ fontSize: 44, marginBottom: 14 }}>📊</div>
           <div style={{ fontSize: 15, marginBottom: 6, color: "#78909c" }}>輸入股票代號和 FinMind Token</div>
-          <div style={{ fontSize: 12 }}>支援 11 種策略回測 · FinMind + TWSE 雙資料源</div>
+          <div style={{ fontSize: 12 }}>支援上市/上櫃 · 11 種策略回測 · FinMind + Yahoo Finance 雙資料源</div>
         </div>
       )}
     </div>
