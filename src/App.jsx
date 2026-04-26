@@ -549,12 +549,16 @@ export default function App() {
     setClaudeLoading(true); setClaudeAnalysis("");
     try {
       const summary = `股票：${stockCode}\n策略：${STRATEGIES[strategy]?.name}\n時間：${startDate} ~ ${endDate}\n初始資金：${(initialCapital/10000).toFixed(0)}萬元\n停損：${stopLoss > 0 ? stopLoss + "%" : "無"}\n停利：${takeProfit > 0 ? takeProfit + "%" : "無"}\n總報酬率：${backtestResult.totalReturn}%\n勝率：${backtestResult.winRate}%（${backtestResult.sellTrades.filter(t=>t.profit>0).length}勝${backtestResult.sellTrades.filter(t=>t.profit<=0).length}敗）\n最大回撤：${backtestResult.maxDrawdown}%\n最終資金：${(backtestResult.finalCapital/10000).toFixed(0)}萬元\n交易次數：${backtestResult.sellTrades.length}次\n最近5筆：${backtestResult.sellTrades.slice(-5).map(t => `${t.date} ${t.profitPct}%(${t.reason})`).join("、")}`;
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/claude", {
         method: "POST",
-        headers: { "x-api-key": claudeKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001", max_tokens: 800,
-          messages: [{ role: "user", content: `你是台股量化分析師，以下是一個回測結果，請給出專業分析和改進建議：\n\n${summary}\n\n請用以下格式回答，不要使用Markdown符號：\n\n📊 整體評估：\n（評估這個策略的表現好壞，50字以內）\n\n✅ 優點：\n（列出2-3個策略的優點）\n\n⚠️ 缺點與風險：\n（列出2-3個需要注意的問題）\n\n💡 改進建議：\n（給出3個具體的改進方向）\n\n🎯 結論：\n（是否建議使用這個策略，30字以內）` }],
+          apiKey: claudeKey,
+          body: {
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 800,
+            messages: [{ role: "user", content: `你是台股量化分析師，以下是一個回測結果，請給出專業分析和改進建議：\n\n${summary}\n\n請用以下格式回答，不要使用Markdown符號：\n\n📊 整體評估：\n（評估這個策略的表現好壞，50字以內）\n\n✅ 優點：\n（列出2-3個策略的優點）\n\n⚠️ 缺點與風險：\n（列出2-3個需要注意的問題）\n\n💡 改進建議：\n（給出3個具體的改進方向）\n\n🎯 結論：\n（是否建議使用這個策略，30字以內）` }],
+          }
         }),
       });
       const json = await res.json();
