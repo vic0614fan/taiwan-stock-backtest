@@ -220,10 +220,11 @@ function runBacktest(data, strategy, params, initialCapital = 1000000) {
 async function fetchYahoo(code, suffix, startTs, endTs, tStart, endDate) {
   try {
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
-    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`;
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
     const res = await fetch(proxyUrl);
     if (!res.ok) return [];
-    const json = await res.json();
+    const wrapper = await res.json();
+    const json = JSON.parse(wrapper.contents);
     const result = json?.chart?.result?.[0];
     if (!result?.timestamp) return [];
     const { timestamp, indicators } = result;
