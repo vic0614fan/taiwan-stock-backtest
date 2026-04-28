@@ -113,6 +113,99 @@ function calcMaxDrawdown(equity, initial) {
   return maxDD.toFixed(2);
 }
 
+// ─── 股性分析 ──────────────────────────────────────────────
+function calcStockPersonality(data, backtestResults) {
+  if (!data || data.length < 20) return null;
+
+  // 1. 波動率：近 60 日每日漲跌幅標準差（年化）
+  const returns = [];
+  for (let i = 1; i < data.length; i++) {
+    returns.push((data[i].close - data[i-1].close) / data[i-1].close);
+  }
+  const recentReturns = returns.slice(-60);
+  const meanR = recentReturns.reduce((s, v) => s + v, 0) / recentReturns.length;
+  const variance = recentReturns.reduce((s, v) => s + Math.pow(v - meanR, 2), 0) / recentReturns.length;
+  const dailyVol = Math.sqrt(variance);
+  const annualVol = dailyVol * Math.sqrt(252) * 100;
+
+  // 2. 趨勢性：MA5 在 MA20 以上的比例（近 60 日）
+  const ma5arr = calcMA(data, 5);
+  const ma20arr = calcMA(data, 20);
+  const lookback = Math.min(60, data.length - 20);
+  let trendCount = 0;
+  for (let i = data.length - lookback; i < data.length; i++) {
+    if (ma5arr[i] !== null && ma20arr[i] !== null && ma5arr[i] > ma20arr[i]) trendCount++;
+  }
+  const trendRatio = trendCount / lookback;
+
+  // 3. 均值回歸傾向：偏離 MA20 後下一根往回靠近的比例
+  let reversionCount = 0, reversionTotal = 0;
+  for (let i = 20; i < data.length - 1; i++) {
+    if (ma20arr[i] === null) continue;
+    const dev = (data[i].close - ma20arr[i]) / ma20arr[i];
+    if (Math.abs(dev) > 0.03) {
+      reversionTotal++;
+      const nextDev = (data[i+1].close - ma20arr[i]) / ma20arr[i];
+      if (Math.abs(nextDev) < Math.abs(dev)) reversionCount++;
+    }
+  }
+  const reversionRatio = reversionTotal > 0 ? reversionCount / reversionTotal : 0.5;
+
+  // 4. 平均持倉天數
+  const avgHoldDays = (() => {
+    if (!backtestResults || backtestResults.sellTrades.length === 0) return 0;
+    const buys = backtestResults.trades.filter(t => t.type === "buy");
+    const sells = backtestResults.sellTrades;
+    const pairs = Math.min(buys.length, sells.length);
+    if (pairs === 0) return 0;
+    let total = 0;
+    for (let i = 0; i < pairs; i++) {
+      total += (new Date(sells[i].date) - new Date(buys[i].date)) / 86400000;
+    }
+    return (total / pairs).toFixed(0);
+  })();
+
+  // 5. 股性判定
+  let personality, personalityColor, personalityDesc;
+  if (annualVol < 25 && trendRatio > 0.55) {
+    personality = "穩健趨勢型"; personalityColor = "#4caf50";
+    personalityDesc = "波動低、趨勢穩定，適合中長線趨勢策略，不適合短線頻繁交易。";
+  } else if (annualVol >= 25 && annualVol < 45 && trendRatio > 0.55) {
+    personality = "強勢趨勢型"; personalityColor = "#ef5350";
+    personalityDesc = "波動中等偏高但趨勢明確，適合趨勢追蹤策略，需設停損控制風險。";
+  } else if (annualVol >= 45) {
+    personality = "高波動投機型"; personalityColor = "#ff7043";
+    personalityDesc = "波動極大，趨勢不穩，不建議無停損操作，適合短線或反轉策略。";
+  } else if (reversionRatio > 0.58) {
+    personality = "震盪均值回歸型"; personalityColor = "#64b5f6";
+    personalityDesc = "價格容易在 MA20 附近來回，適合 RSI 超賣反彈、布林通道反轉等策略。";
+  } else {
+    personality = "混合型"; personalityColor = "#ffd54f";
+    personalityDesc = "無明顯偏性，各類策略效果接近，建議用策略比較功能找最佳選項。";
+  }
+
+  return {
+    annualVol: annualVol.toFixed(1),
+    trendRatio: (trendRatio * 100).toFixed(0),
+    reversionRatio: (reversionRatio * 100).toFixed(0),
+    avgHoldDays,
+    personality, personalityColor, personalityDesc,
+    totalDays: data.length,
+  };
+}
+
+// ─── 策略推薦 ──────────────────────────────────────────────
+function recommendStrategies(personality) {
+  const rules = {
+    "穩健趨勢型":     { best: ["ma_triple","macd_cross","turtle"],      good: ["ma_cross","rsi_ma"],          avoid: ["rsi_oversold","bollinger_revert","kd_cross"], reason: "趨勢穩定，適合順勢策略；均值回歸策略容易錯過主升段。" },
+    "強勢趨勢型":     { best: ["turtle","ma_triple","volume_breakout"],  good: ["macd_cross","bollinger","ma_cross"], avoid: ["rsi_oversold","bollinger_revert"], reason: "波動大且趨勢強，突破策略報酬高；但務必設置停損（建議 8~10%）。" },
+    "高波動投機型":   { best: ["rsi_oversold","bollinger_revert","kd_cross"], good: ["bollinger","rsi_ma"],   avoid: ["ma_triple","turtle","macd_cross"],    reason: "趨勢不穩定，反轉策略較能掌握短期波動；停損設 5~8% 以內。" },
+    "震盪均值回歸型": { best: ["rsi_oversold","kd_cross","bollinger_revert"], good: ["rsi_ma","ma_cross"],   avoid: ["turtle","volume_breakout","ma_triple"], reason: "價格容易回歸均線，反轉類策略最有效；突破策略常遭假突破。" },
+    "混合型":         { best: ["rsi_ma","ma_cross"],                     good: ["kd_cross","macd_cross","bollinger"], avoid: [],                              reason: "建議先用「比較所有策略」功能找出這段期間最有效的策略再決定。" },
+  };
+  return rules[personality] || rules["混合型"];
+}
+
 // ─── 回測引擎 ─────────────────────────────────────────────
 function runBacktest(data, strategy, params, initialCapital, stopLossPct, takeProfitPct) {
   const ma5 = calcMA(data, 5), ma20 = calcMA(data, 20), ma60 = calcMA(data, 60);
@@ -499,12 +592,15 @@ export default function App() {
   const [splitResult, setSplitResult] = useState(null);
   const [optimizeResult, setOptimizeResult] = useState(null);
   const [benchmarkData, setBenchmarkData] = useState(null);
+  const [stockPersonality, setStockPersonality] = useState(null);
+  const [claudeOutlook, setClaudeOutlook] = useState("");
+  const [claudeOutlookLoading, setClaudeOutlookLoading] = useState(false);
 
   const handleAnalyze = async () => {
     if (!finmindToken) { setError("請先輸入 FinMind Token 才能開始分析"); return; }
     if (!stockCode) { setError("請輸入股票代號"); return; }
     if (startDate >= endDate) { setError("開始日期必須早於結束日期"); return; }
-    setLoading(true); setError(""); setBacktestResult(null); setAllResults(null); setClaudeAnalysis("");
+    setLoading(true); setError(""); setBacktestResult(null); setAllResults(null); setClaudeAnalysis(""); setStockPersonality(null); setClaudeOutlook("");
     try {
       setLoadingMsg("📡 抓取股價資料中...");
       const data = await fetchMergedData(stockCode, startDate, endDate, finmindToken);
@@ -524,7 +620,9 @@ export default function App() {
       setStockData(data); setChartData(chart);
       setLoadingMsg("🔬 執行回測中...");
       const params = strategy === "custom" ? customParams : {};
-      setBacktestResult(runBacktest(data, strategy, params, initialCapital, stopLoss, takeProfit));
+      const result = runBacktest(data, strategy, params, initialCapital, stopLoss, takeProfit);
+      setBacktestResult(result);
+      setStockPersonality(calcStockPersonality(data, result));
       setActiveTab("chart");
     } catch(e) { setError(e.message); }
     setLoading(false); setLoadingMsg("");
@@ -641,6 +739,64 @@ export default function App() {
       setClaudeAnalysis(json.content?.[0]?.text || "分析失敗，請重試");
     } catch(e) { setError("Claude API 呼叫失敗：" + e.message); }
     setClaudeLoading(false);
+  };
+
+  const handleClaudeOutlook = async () => {
+    if (!claudeKey) { setError("請輸入 Claude API Key"); return; }
+    if (!stockData || !stockPersonality) { setError("請先執行回測"); return; }
+    setClaudeOutlookLoading(true); setClaudeOutlook("");
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const recentPrices = stockData.slice(-10).map(d => `${d.date} 收${d.close}`).join("、");
+      const prompt = `你是台股分析師。請幫我分析台股代號「${stockCode}」的近期走勢與後市展望。
+
+【技術面資訊】
+- 股性：${stockPersonality.personality}（${stockPersonality.personalityDesc}）
+- 年化波動率：${stockPersonality.annualVol}%
+- 近期趨勢強度（MA5>MA20 佔比）：${stockPersonality.trendRatio}%
+- 均值回歸傾向：${stockPersonality.reversionRatio}%
+- 最近 10 個交易日收盤：${recentPrices}
+- 回測策略（${STRATEGIES[strategy]?.name}）報酬率：${backtestResult?.totalReturn}%，勝率：${backtestResult?.winRate}%
+
+【今日日期】${today}
+
+請用網路搜尋這支股票最新的消息（包含法說會、營收公告、產業動態、總體經濟影響等），然後給出以下分析：
+
+📡 最新動態：
+（根據搜尋結果，說明這支股票最近 1~3 個月的重要事件，約 100 字）
+
+📈 技術面判讀：
+（根據上方技術指標，說明目前股票處於什麼技術位置，約 60 字）
+
+🔮 後市展望：
+（結合時事與技術面，給出近期 1~3 個月可能走勢，標明偏多/偏空/盤整，約 80 字）
+
+⚠️ 主要風險：
+（列出 2~3 個需要留意的風險因素）
+
+請不要使用 Markdown 符號，直接用純文字輸出。`;
+
+      const res = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: claudeKey,
+          body: {
+            model: "claude-sonnet-4-5-20251022",
+            max_tokens: 1200,
+            tools: [{ type: "web_search_20250305", name: "web_search" }],
+            messages: [{ role: "user", content: prompt }],
+          }
+        }),
+      });
+      const json = await res.json();
+      const text = (json.content || [])
+        .filter(b => b.type === "text")
+        .map(b => b.text)
+        .join("\n");
+      setClaudeOutlook(text || "分析失敗，請重試");
+    } catch(e) { setError("Claude API 呼叫失敗：" + e.message); }
+    setClaudeOutlookLoading(false);
   };
 
   const inp = { background: "#0d1b26", border: "1px solid #1e3a4f", borderRadius: 6, color: "#e0f0ff", padding: "8px 12px", fontSize: 13, width: "100%", outline: "none" };
@@ -1098,42 +1254,122 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === "ai_analysis" && (            <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 20 }}>
-              <h3 style={{ margin: "0 0 16px", color: "#90caf9", fontSize: 13 }}>🤖 Claude AI 回測分析</h3>
+          {activeTab === "ai_analysis" && (
+            <div style={{ display: "grid", gap: 14 }}>
               {!stockData ? (
-                <div style={{ color: "#546e7a", fontSize: 13, textAlign: "center", padding: 40 }}>請先點「開始分析」執行回測，再進行 AI 分析</div>
+                <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 40, color: "#546e7a", fontSize: 13, textAlign: "center" }}>
+                  請先點「開始分析」執行回測，再進行 AI 分析
+                </div>
               ) : (
                 <>
-                  {backtestResult && (
-                    <div style={{ background: "#0d1b26", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 12 }}>
-                      <div style={{ color: "#90caf9", marginBottom: 8, fontWeight: 600 }}>回測摘要</div>
-                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", color: "#546e7a" }}>
+                  {/* ── 區塊 1：股性分析（純前端） ── */}
+                  {stockPersonality && (
+                    <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
+                      <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>🧬 股性分析 — {stockCode}</h3>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 14 }}>
+                        {[
+                          { label: "股性類型", value: stockPersonality.personality, color: stockPersonality.personalityColor },
+                          { label: "年化波動率", value: `${stockPersonality.annualVol}%`, color: parseFloat(stockPersonality.annualVol) > 40 ? "#ff7043" : parseFloat(stockPersonality.annualVol) > 25 ? "#ffd54f" : "#4caf50" },
+                          { label: "趨勢強度", value: `${stockPersonality.trendRatio}%`, sub: "MA5>MA20 佔比", color: parseFloat(stockPersonality.trendRatio) > 55 ? "#ef5350" : "#64b5f6" },
+                          { label: "均值回歸率", value: `${stockPersonality.reversionRatio}%`, sub: "偏離後回歸比例", color: parseFloat(stockPersonality.reversionRatio) > 58 ? "#64b5f6" : "#546e7a" },
+                          { label: "平均持倉", value: `${stockPersonality.avgHoldDays} 天`, sub: "本次策略", color: "#ce93d8" },
+                          { label: "分析資料", value: `${stockPersonality.totalDays} 筆`, sub: "交易日", color: "#80cbc4" },
+                        ].map(({ label, value, color, sub }) => (
+                          <div key={label} style={{ background: "#0d1b26", borderRadius: 8, padding: "12px 16px", border: "1px solid #1e3a4f" }}>
+                            <div style={{ color: "#546e7a", fontSize: 10, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
+                            <div style={{ color, fontSize: 17, fontWeight: 700, fontFamily: "monospace" }}>{value}</div>
+                            {sub && <div style={{ color: "#546e7a", fontSize: 10, marginTop: 2 }}>{sub}</div>}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ background: "#0d1b26", borderRadius: 8, padding: "10px 14px", borderLeft: `3px solid ${stockPersonality.personalityColor}` }}>
+                        <span style={{ color: stockPersonality.personalityColor, fontWeight: 700, fontSize: 12 }}>{stockPersonality.personality}：</span>
+                        <span style={{ color: "#90caf9", fontSize: 12 }}>{stockPersonality.personalityDesc}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 區塊 2：策略推薦（純前端） ── */}
+                  {stockPersonality && (() => {
+                    const rec = recommendStrategies(stockPersonality.personality);
+                    return (
+                      <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
+                        <h3 style={{ margin: "0 0 14px", color: "#90caf9", fontSize: 13 }}>🎯 策略推薦 — 根據 {stockPersonality.personality}</h3>
+                        <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+                          {[
+                            { label: "⭐ 最推薦", keys: rec.best, color: "#ef5350", bg: "#1a0808" },
+                            { label: "👍 次推薦", keys: rec.good, color: "#ffd54f", bg: "#1a1500" },
+                            { label: "❌ 不建議", keys: rec.avoid, color: "#546e7a", bg: "#0d1b26" },
+                          ].map(({ label, keys, color, bg }) => keys.length > 0 && (
+                            <div key={label} style={{ background: bg, borderRadius: 8, padding: "10px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                              <span style={{ color, fontSize: 12, fontWeight: 700, minWidth: 60 }}>{label}</span>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                {keys.map(k => (
+                                  <span key={k}
+                                    style={{ background: `${STRATEGIES[k]?.color}22`, border: `1px solid ${STRATEGIES[k]?.color}88`, color: STRATEGIES[k]?.color, borderRadius: 5, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                                    onClick={() => { setStrategy(k); setActiveTab("chart"); }}
+                                    title="點擊切換至此策略"
+                                  >{STRATEGIES[k]?.name}</span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ color: "#546e7a", fontSize: 11, padding: "8px 12px", background: "#0d1b26", borderRadius: 6, borderLeft: "3px solid #1e3a4f" }}>
+                          💡 {rec.reason}
+                        </div>
+                        <div style={{ color: "#37474f", fontSize: 10, marginTop: 6 }}>點擊策略名稱可直接切換並重新回測</div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── 區塊 3：AI 回測分析（原有功能） ── */}
+                  <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
+                    <h3 style={{ margin: "0 0 12px", color: "#90caf9", fontSize: 13 }}>🤖 AI 回測分析</h3>
+                    {backtestResult && (
+                      <div style={{ background: "#0d1b26", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, display: "flex", gap: 20, flexWrap: "wrap", color: "#546e7a" }}>
                         <span>股票：<span style={{ color: "#e0f0ff" }}>{stockCode}</span></span>
                         <span>策略：<span style={{ color: "#e0f0ff" }}>{STRATEGIES[strategy]?.name}</span></span>
                         <span>報酬率：<span style={{ color: profitColor(backtestResult.totalReturn) }}>{backtestResult.totalReturn}%</span></span>
                         <span>勝率：<span style={{ color: "#64b5f6" }}>{backtestResult.winRate}%</span></span>
                         <span>最大回撤：<span style={{ color: "#ff7043" }}>-{backtestResult.maxDrawdown}%</span></span>
                       </div>
-                    </div>
-                  )}
-                  {!backtestResult && (
-                    <div style={{ color: "#ffd54f", fontSize: 12, marginBottom: 12, padding: "8px 12px", background: "#1a1500", borderRadius: 6, borderLeft: "3px solid #ffd54f" }}>
-                      ⚠️ 資料已載入但尚未執行回測，請點「開始分析」後再使用 AI 分析
-                    </div>
-                  )}
-                  {!claudeKey && (
-                    <div style={{ color: "#ffd54f", fontSize: 12, marginBottom: 12, padding: "8px 12px", background: "#1a1500", borderRadius: 6, borderLeft: "3px solid #ffd54f" }}>
-                      ⚠️ 請在上方輸入 Claude API Key 才能使用 AI 分析功能
-                    </div>
-                  )}
-                  <button onClick={handleClaudeAnalysis} disabled={claudeLoading || !claudeKey || !backtestResult} style={{ background: (claudeKey && backtestResult) ? "linear-gradient(135deg,#6a1b9a,#1565c0)" : "#1e3a4f", border: "none", borderRadius: 8, color: "#fff", padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: (claudeKey && backtestResult) ? "pointer" : "not-allowed", marginBottom: 16 }}>
-                    {claudeLoading ? "🤖 分析中..." : "🤖 開始 AI 分析"}
-                  </button>
-                  {claudeAnalysis && (
-                    <div style={{ background: "#0d1b26", borderRadius: 10, padding: "16px 20px", border: "1px solid #6a1b9a", lineHeight: 1.8, fontSize: 13, color: "#e0f0ff", whiteSpace: "pre-line" }}>
-                      {claudeAnalysis}
-                    </div>
-                  )}
+                    )}
+                    {!backtestResult && <div style={{ color: "#ffd54f", fontSize: 12, marginBottom: 12, padding: "8px 12px", background: "#1a1500", borderRadius: 6, borderLeft: "3px solid #ffd54f" }}>⚠️ 資料已載入但尚未執行回測，請點「開始分析」後再使用 AI 分析</div>}
+                    {!claudeKey && <div style={{ color: "#ffd54f", fontSize: 12, marginBottom: 12, padding: "8px 12px", background: "#1a1500", borderRadius: 6, borderLeft: "3px solid #ffd54f" }}>⚠️ 請在上方輸入 Claude API Key 才能使用 AI 分析功能</div>}
+                    <button onClick={handleClaudeAnalysis} disabled={claudeLoading || !claudeKey || !backtestResult}
+                      style={{ background: (claudeKey && backtestResult) ? "linear-gradient(135deg,#6a1b9a,#1565c0)" : "#1e3a4f", border: "none", borderRadius: 8, color: "#fff", padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: (claudeKey && backtestResult) ? "pointer" : "not-allowed", marginBottom: 12 }}>
+                      {claudeLoading ? "🤖 分析中..." : "🤖 分析回測結果"}
+                    </button>
+                    {claudeAnalysis && (
+                      <div style={{ background: "#0d1b26", borderRadius: 10, padding: "16px 20px", border: "1px solid #6a1b9a", lineHeight: 1.8, fontSize: 13, color: "#e0f0ff", whiteSpace: "pre-line" }}>
+                        {claudeAnalysis}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── 區塊 4：走勢預測（Claude + web_search） ── */}
+                  <div style={{ background: "#0a1520", border: "1px solid #1e3a4f", borderRadius: 12, padding: 18 }}>
+                    <h3 style={{ margin: "0 0 6px", color: "#90caf9", fontSize: 13 }}>
+                      🔮 後市展望預測
+                      <span style={{ marginLeft: 8, fontSize: 10, background: "#1a0d2e", border: "1px solid #7c4dff", borderRadius: 4, padding: "2px 7px", color: "#b39ddb" }}>Claude + 網路搜尋</span>
+                    </h3>
+                    <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 12 }}>結合最新時事新聞與技術面，分析 {stockCode} 近期可能走勢</div>
+                    {!claudeKey && <div style={{ color: "#ffd54f", fontSize: 12, marginBottom: 12, padding: "8px 12px", background: "#1a1500", borderRadius: 6, borderLeft: "3px solid #ffd54f" }}>⚠️ 請在上方輸入 Claude API Key</div>}
+                    <button onClick={handleClaudeOutlook} disabled={claudeOutlookLoading || !claudeKey || !stockPersonality}
+                      style={{ background: (claudeKey && stockPersonality) ? "linear-gradient(135deg,#1a237e,#4a148c)" : "#1e3a4f", border: "none", borderRadius: 8, color: "#fff", padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: (claudeKey && stockPersonality) ? "pointer" : "not-allowed", marginBottom: 12 }}>
+                      {claudeOutlookLoading ? "🔍 搜尋最新消息並分析中..." : "🔮 預測後市走勢"}
+                    </button>
+                    {claudeOutlookLoading && (
+                      <div style={{ color: "#546e7a", fontSize: 11, marginBottom: 8 }}>⏳ Claude 正在搜尋 {stockCode} 的最新新聞、法說會、產業動態...</div>
+                    )}
+                    {claudeOutlook && (
+                      <div style={{ background: "#0d0d1f", borderRadius: 10, padding: "16px 20px", border: "1px solid #4a148c", lineHeight: 1.9, fontSize: 13, color: "#e0f0ff", whiteSpace: "pre-line" }}>
+                        {claudeOutlook}
+                      </div>
+                    )}
+                    <div style={{ color: "#37474f", fontSize: 10, marginTop: 8 }}>⚠️ AI 預測僅供參考，不構成投資建議。本功能使用 claude-sonnet 模型（費用略高於 haiku）。</div>
+                  </div>
                 </>
               )}
             </div>
