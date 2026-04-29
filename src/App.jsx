@@ -420,7 +420,12 @@ const CandlestickChart = ({ data, trades, chartData }) => {
         const ma5v = chartData?.[viewRange.start + idx]?.ma5;
         const ma20v = chartData?.[viewRange.start + idx]?.ma20;
         const ma60v = chartData?.[viewRange.start + idx]?.ma60;
-        setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, data: d, ma5: ma5v, ma20: ma20v, ma60: ma60v });
+        const dayTrades = (trades || []).filter(t => t.date === d.date);
+        const signals = dayTrades.map(t => t.type === "buy"
+          ? { label: "買入", color: "#4caf50", reason: t.reason || "策略訊號" }
+          : { label: "賣出", color: "#ef5350", reason: t.reason || "策略訊號" }
+        );
+        setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, data: d, ma5: ma5v, ma20: ma20v, ma60: ma60v, signals });
       }
     } else {
       setCrosshairX(null); setCrosshairIdxState(null); setTooltip(null);
@@ -495,6 +500,16 @@ const CandlestickChart = ({ data, trades, chartData }) => {
             {tooltip.ma60 && <div style={{ color: "#a5d6a7" }}>MA60：{tooltip.ma60}</div>}
           </div>
           <div style={{ color: "#546e7a", marginTop: 2 }}>量：{((tooltip.data.volume || 0) / 1000).toFixed(0)}K</div>
+          {tooltip.signals?.length > 0 && (
+            <div style={{ borderTop: "1px solid #1e3a4f", marginTop: 4, paddingTop: 4 }}>
+              {tooltip.signals.map((s, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, marginTop: i > 0 ? 3 : 0 }}>
+                  <span style={{ color: s.color, fontWeight: 700, fontSize: 11 }}>{s.label === "買入" ? "▲" : "▼"} {s.label}</span>
+                  <span style={{ color: "#78909c", fontSize: 10 }}>{s.reason}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
