@@ -804,7 +804,7 @@ export default function App() {
         body: JSON.stringify({
           apiKey: claudeKey,
           body: {
-            model: "claude-sonnet-4-5-20251022",
+            model: "claude-sonnet-4-5-20250929",
             max_tokens: 1200,
             tools: [{ type: "web_search_20250305", name: "web_search" }],
             messages: [{ role: "user", content: prompt }],
@@ -812,11 +812,16 @@ export default function App() {
         }),
       });
       const json = await res.json();
+      if (json.error) {
+        setClaudeOutlook(`API 錯誤：${json.error.message || JSON.stringify(json.error)}`);
+        setClaudeOutlookLoading(false);
+        return;
+      }
       const text = (json.content || [])
         .filter(b => b.type === "text")
         .map(b => b.text)
         .join("\n");
-      setClaudeOutlook(text || "分析失敗，請重試");
+      setClaudeOutlook(text || `分析失敗，API 回傳：${JSON.stringify(json, null, 2)}`);
     } catch(e) { setError("Claude API 呼叫失敗：" + e.message); }
     setClaudeOutlookLoading(false);
   };
