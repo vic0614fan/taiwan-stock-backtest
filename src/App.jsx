@@ -292,14 +292,13 @@ function runBacktest(data, strategy, params, initialCapital, stopLossPct, takePr
 }
 
 // ─── 資料抓取 ─────────────────────────────────────────────
-async function fetchYahoo(code, suffix, startTs, endTs, tStart, endDate) {
+async function fetchYahoo(code, startTs, endTs, tStart, endDate) {
   try {
-    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?interval=1d&period1=${startTs}&period2=${endTs}`;
-    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`);
+    const res = await fetch(`/api/yahoo?code=${encodeURIComponent(code)}&startTs=${startTs}&endTs=${endTs}`);
     if (!res.ok) return [];
     const wrapper = await res.json();
-    const json = JSON.parse(wrapper.contents);
-    const result = json?.chart?.result?.[0];
+    if (!wrapper.data) return [];
+    const result = wrapper.data?.chart?.result?.[0];
     if (!result?.timestamp) return [];
     const { timestamp, indicators } = result;
     const quote = indicators.quote[0];
@@ -314,22 +313,45 @@ async function fetchYahoo(code, suffix, startTs, endTs, tStart, endDate) {
 async function fetchMergedData(code, startDate, endDate, token) {
   const CUTOFF = "2025-04-01";
   let finmindData = [], recentData = [];
+
+  // FinMind：抓歷史段
   if (startDate < CUTOFF) {
     const fEnd = endDate < CUTOFF ? endDate : CUTOFF;
-    const res = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${startDate}&end_date=${fEnd}&token=${token}`);
-    const json = await res.json();
-    if (json.data?.length) finmindData = json.data.map(d => ({ date: d.date, open: parseFloat(d.open), high: parseFloat(d.max), low: parseFloat(d.min), close: parseFloat(d.close), volume: parseFloat(d.Trading_Volume) }));
+    try {
+      const res = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${startDate}&end_date=${fEnd}&token=${token}`);
+      const json = await res.json();
+      if (json.data?.length) {
+        finmindData = json.data.map(d => ({ date: d.date, open: parseFloat(d.open), high: parseFloat(d.max), low: parseFloat(d.min), close: parseFloat(d.close), volume: parseFloat(d.Trading_Volume) }));
+      } else if (json.msg && json.msg !== "success") {
+        throw new Error(`FinMind 錯誤：${json.msg}`);
+      }
+    } catch(e) {
+      if (e.message.startsWith("FinMind")) throw e;
+    }
   }
+
+  // Yahoo（透過 /api/yahoo 伺服器端代理）：抓近期段
   if (endDate >= CUTOFF) {
     const tStart = startDate > CUTOFF ? startDate : CUTOFF;
     const startTs = Math.floor(new Date(tStart).getTime() / 1000);
     const endTs = Math.floor(new Date(endDate).getTime() / 1000) + 86400;
-    recentData = await fetchYahoo(code, ".TW", startTs, endTs, tStart, endDate);
-    if (recentData.length === 0) recentData = await fetchYahoo(code, ".TWO", startTs, endTs, tStart, endDate);
+    recentData = await fetchYahoo(code, startTs, endTs, tStart, endDate);
   }
+
   const seen = new Set();
-  const merged = [...finmindData, ...recentData].filter(d => { if (!d.date || seen.has(d.date)) return false; seen.add(d.date); return true; }).sort((a, b) => a.date.localeCompare(b.date));
-  if (merged.length === 0) throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確`);
+  const merged = [...finmindData, ...recentData]
+    .filter(d => { if (!d.date || seen.has(d.date)) return false; seen.add(d.date); return true; })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (merged.length === 0) {
+    if (finmindData.length === 0 && startDate < CUTOFF && recentData.length === 0 && endDate >= CUTOFF)
+      throw new Error(`找不到股票 ${code} 的資料。請確認：(1) 代號是否正確 (2) FinMind Token 是否有效`);
+    if (finmindData.length === 0 && startDate < CUTOFF)
+      throw new Error(`FinMind 找不到 ${code} 的歷史資料，請確認代號正確且 Token 有效`);
+    if (recentData.length === 0 && endDate >= CUTOFF)
+      throw new Error(`近期資料（${CUTOFF} 之後）抓取失敗，請縮短結束日期至 ${CUTOFF} 之前，或稍後再試`);
+    throw new Error(`找不到股票 ${code} 的資料，請確認代號是否正確`);
+  }
   if (merged.length < 25) throw new Error(`資料筆數不足（${merged.length} 筆），請延長時間區間`);
   return merged;
 }
